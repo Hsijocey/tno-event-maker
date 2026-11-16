@@ -244,7 +244,8 @@ T.se = {
       { k: 'scan', type: 'range', label: '扫描线强度 Scanlines', min: 0, max: 2, step: 0.05, def: 1 },
       { k: 'underlay', type: 'check', label: '文字暗色衬底 Text underlay', def: true },
       { k: 'nuke', type: 'check', label: '核战版外框 Nuclear-war frame', def: false }
-    ] }
+    ] },
+    { title: '配乐 Music', fields: [{ k: 'music', type: 'audio' }] }
   ],
   async draw(s, lang) {
     const [fTitle, fBomb] = await Promise.all([loadChain('aldrich_24_outline', lang), loadChain('Bomb_24', lang)]);
@@ -384,9 +385,121 @@ T.news = {
   }
 };
 
+/* === In-game politics view (interface/countrypoliticsview.gui + TNO_SG_Politics.gui) === */
+function parsePie(txt) {
+  const out = [];
+  String(txt || '').split('\n').forEach(line => {
+    const m = line.match(/(-?\d+(?:\.\d+)?)/), c = line.match(/#[0-9a-fA-F]{3,8}\b/);
+    if (m && +m[1] > 0) out.push({ v: +m[1], c: c ? c[0] : '#888888' });
+  });
+  return out;
+}
+function fitIn(c, im, x, y, w, h, maxScale) {
+  const sc = Math.min(w / im.width, h / im.height, maxScale || 1), dw = im.width * sc, dh = im.height * sc;
+  c.imageSmoothingQuality = 'high';
+  c.drawImage(im, Math.round(x + (w - dw) / 2), Math.round(y + (h - dh) / 2), dw, dh);
+}
+T.pol = {
+  name: '国家介绍', en: 'Politics View',
+  groups: [
+    { title: '领袖与政党 Leader & party', fields: [
+      { k: 'leader', type: 'text', label: '领袖姓名 Leader', zh: '理查德·尼克松', en: 'Richard Nixon' },
+      ...picFields('portrait', '领袖头像 Portrait (156×210)'),
+      { k: 'party', type: 'text', label: '执政党 Ruling party', zh: '共和-民主联盟', en: 'R-D Coalition' },
+      { k: 'subideo', type: 'text', label: '意识形态 Ideology', zh: '自由保守主义', en: 'Liberal Conservatism' },
+      { k: 'faction', type: 'image', label: '阵营图标 Faction icon（可选）' },
+      { k: 'flag', type: 'image', label: '国旗 Flag（可选，显示在标题栏左侧）' }
+    ] },
+    { title: '饼图 Pie chart', fields: [
+      { k: 'pie', type: 'textarea', label: '每行一块：百分比 + 颜色（#十六进制），后面可写备注', rows: 6,
+        zh: '38 #3a6fb5 自由保守主义\n27 #5aa0d8 自由主义\n14 #c9a227 进步主义\n9 #b03a3a 社会民主主义\n7 #6b4a8c 威权民主\n5 #4a4a4a 其他',
+        en: '38 #3a6fb5 Liberal Conservatism\n27 #5aa0d8 Liberalism\n14 #c9a227 Progressivism\n9 #b03a3a Social Democracy\n7 #6b4a8c Authoritarian Democracy\n5 #4a4a4a Others' }
+    ] },
+    { title: '国策与国家精神 Focus & spirits', fields: [
+      { k: 'goal', type: 'text', label: '当前国策 Active focus', zh: '重建美国', en: 'Rebuilding America' },
+      { k: 'goalicon', type: 'image', label: '国策图标 Focus icon（可选）' },
+      { k: 'progress', type: 'range', label: '国策进度 Progress', min: 0, max: 1, step: 0.01, def: 0.45 },
+      { k: 'spirits', type: 'images', max: 6, label: '国家精神图标 Spirit icons（可多选，最多 6 个）' }
+    ] },
+    { title: '内阁 Cabinet', fields: [
+      { k: 'cat1', type: 'text', label: '第一行标题', zh: '政府首脑', en: 'Head of Government' },
+      { k: 'cat1imgs', type: 'images', max: 3, label: '第一行图标（最多 3 个）' },
+      { k: 'cat2', type: 'text', label: '第二行标题', zh: '内阁', en: 'Cabinet' },
+      { k: 'cat2imgs', type: 'images', max: 3, label: '第二行图标（最多 3 个）' }
+    ] },
+    { title: '界面文字 Interface labels', fields: [
+      { k: 't_title', type: 'text', label: '窗口标题', zh: '政治', en: 'Political' },
+      { k: 't_spirit', type: 'text', label: '国家精神标题', zh: '国家精神', en: 'National Spirit' },
+      { k: 'b1', type: 'text', label: '按钮 1', zh: '        占领地区', en: 'Occupied territories' },
+      { k: 'b2', type: 'text', label: '按钮 2', zh: '附属国', en: 'Manage subjects' },
+      { k: 'b3', type: 'text', label: '按钮 3', zh: '外交事务', en: 'Foreign Affairs' }
+    ] }
+  ],
+  async draw(s, lang) {
+    const [b36, b18, b16, a22, a20, a18] = await Promise.all(['Bomb_36', 'Bomb_18', 'Bomb_16', 'aldrich_22_outline', 'aldrich_20_outline', 'aldrich_18_outline'].map(n => loadChain(n, lang)));
+    const [win, hdr, bg, pov, lfr, gbg, gbtn, gfr, gfill, cath, cati, close, gunk, unk, btn, btnU] = await Promise.all(['pol_window.png', 'pol_header.png', 'pol_bg.png', 'pol_pie_overlay.png', 'pol_leader_frame.png', 'pol_goal_bg.png', 'pol_goal_button.png', 'pol_goal_progress_frame.png', 'pol_goal_progress.png', 'pol_cat_header.png', 'pol_cat_icons.png', 'pol_close.png', 'goal_unknown.png', 'leader_unknown.png', 'tno_button_148.png', 'tno_button_148_underlay.png'].map(A));
+    cv.width = 550; cv.height = 526; ctx.clearRect(0, 0, cv.width, cv.height);
+    cornered(ctx, win, 0, 0, 549, 526, 64, 64, true);
+    ctx.drawImage(hdr, 5, 3);
+    const fl = userImg['pol.flag'];
+    if (fl) fitIn(ctx, fl, 10, 12, 30, 20, 4);
+    textBox(ctx, s.t_title, b36, 'Bomb_36', { x: 45, y: 4, w: 400, maxLines: 1 });
+    ctx.drawImage(bg, 0, 44);
+    // pie chart (pieChartType size 71), then the glass overlay
+    const pie = parsePie(s.pie), tot = pie.reduce((a, p) => a + p.v, 0);
+    if (tot > 0) {
+      const cx = 438, cy = 382.5, r = 71;
+      let a0 = -Math.PI / 2;
+      for (const p of pie) {
+        const a1 = a0 + p.v / tot * Math.PI * 2;
+        ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, r, a0, a1); ctx.closePath();
+        ctx.fillStyle = p.c; ctx.fill();
+        a0 = a1;
+      }
+    }
+    ctx.drawImage(pov, 356, 300);
+    // leader
+    const por = userImg['pol.portrait'];
+    if (por) ctx.drawImage(fxCanvas(por, 156, 210, pp(s, 'portrait'), 'raw', 0), 9, 55); else ctx.drawImage(unk, 9, 55);
+    ctx.drawImage(lfr, 1, 45);
+    textBox(ctx, s.leader, b18, 'Bomb_18', { x: 10, y: 273, w: 155, h: 20, fmt: 'center', vcenter: true, maxLines: 1 });
+    // active focus
+    ctx.drawImage(gbg, 176, 54);
+    ctx.drawImage(gbtn, 0, 0, 259, 83, 276, 61, 259, 83);
+    const gi = userImg['pol.goalicon'] || gunk;
+    fitIn(ctx, gi, 223 - 47, 102 - 38, 94, 76, 1);
+    textBox(ctx, s.goal, a22, 'aldrich_22_outline', { x: 296, y: 92, w: 218, h: 20, fmt: 'center', vcenter: true, maxLines: 1 });
+    const pw = Math.round(237 * Math.max(0, Math.min(1, +s.progress)));
+    if (pw > 0) ctx.drawImage(gfill, 0, 6, pw, 6, 287, 127, pw, 6);
+    ctx.drawImage(gfr, 286, 126);
+    // national spirits
+    textBox(ctx, s.t_spirit, b16, 'Bomb_16', { x: 180, y: 151, w: 200, maxLines: 1 });
+    (userImg['pol.spirits'] || []).slice(0, 6).forEach((im, i) => fitIn(ctx, im, 178 + i * 60, 169, 60, 68, 1));
+    // ruling party (TNO_SG_politics_faction_leader_container at 230,270)
+    const fa = userImg['pol.faction'];
+    if (fa) fitIn(ctx, fa, 200, 244, 49, 52, 1);
+    textBox(ctx, s.party, a20, 'aldrich_20_outline', { x: 383, y: 253, w: 160, maxLines: 1 });
+    textBox(ctx, s.subideo, a18, 'aldrich_18_outline', { x: 383, y: 270, w: 160, maxLines: 1 });
+    // idea categories
+    [['cat1', 'cat1imgs'], ['cat2', 'cat2imgs']].forEach(([tk, ik], i) => {
+      const by = 275 + 14 + i * 90;
+      ctx.drawImage(cath, 52 - 40, by + 12, 321, 22);
+      ctx.drawImage(cati, i * 48, 0, 48, 35, 52 - 29, by + 15, 24, 17.5);
+      textBox(ctx, s[tk], b16, 'Bomb_16', { x: 52, y: by + 13, w: 300, maxLines: 1 });
+      (userImg['pol.' + ik] || []).slice(0, 3).forEach((im, j) => fitIn(ctx, im, 40 + j * 100, by + 34, 100, 64, 1));
+    });
+    // bottom buttons
+    [37, 202, 367].forEach(x => { ctx.drawImage(btnU, x, 483); ctx.drawImage(btn, x, 483); });
+    textBox(ctx, s.b1, b16, 'Bomb_16', { x: 48, y: 493, w: 200, maxLines: 1 });
+    textBox(ctx, s.b2, b16, 'Bomb_16', { x: 176, y: 493, w: 200, fmt: 'center', maxLines: 1 });
+    textBox(ctx, s.b3, b16, 'Bomb_16', { x: 367, y: 483, w: 148, h: 34, fmt: 'center', vcenter: true, maxLines: 1 });
+    ctx.drawImage(close, 516, 11);
+  }
+};
+
 /* === Country selection screen (frontendgamesetupview.gui: gamesetup_interesting_countries_window) === */
 T.cs = {
-  name: '国家介绍', en: 'Country Select',
+  name: '选国界面', en: 'Country Select',
   fonts: ['aldrich_24_outline', 'aldrich_20_outline', 'aldrich_16_outline', 'Bomb_18', 'Bomb_16'],
   groups: [
     { title: '领袖与政党 Leader & party', fields: [
@@ -532,7 +645,7 @@ T.ci = {
 };
 
 /* ---------- state + UI ---------- */
-const ORDER = ['se', 'news', 'report', 'cs', 'ci'];
+const ORDER = ['se', 'news', 'report', 'pol', 'cs', 'ci'];
 let cur = 'se', lang = 'zh';
 let store = {};
 try { store = JSON.parse(localStorage.getItem('tno-maker-v1') || '{}') || {}; } catch (e) { store = {}; }
@@ -546,7 +659,7 @@ function defVal(f, lg) { return isText(f) ? f[lg] : f.def; }
 function getState(t, lg) {
   const s = {}, saved = store[t] || {};
   for (const f of fieldsOf(t)) {
-    if (f.type === 'image') continue;
+    if (f.type === 'image' || f.type === 'images' || f.type === 'audio') continue;
     const key = isText(f) ? f.k + '@' + lg : f.k;
     s[f.k] = saved[key] !== undefined ? saved[key] : defVal(f, lg);
   }
@@ -620,6 +733,22 @@ function buildForm() {
         const clr = el('button', { type: 'button', className: 'btn', text: '清除 Clear' });
         clr.addEventListener('click', () => { userImg[key] = null; inp.value = ''; render(); });
         fs.appendChild(el('label', { className: 'f' }, [lab, el('div', { className: 'row' }, [inp, clr])]));
+      } else if (f.type === 'images') {
+        const key = cur + '.' + f.k;
+        const inp = el('input', { type: 'file', id, accept: 'image/*', multiple: true });
+        inp.addEventListener('change', async () => {
+          const list = [];
+          for (const file of Array.from(inp.files).slice(0, f.max || 6)) {
+            const im = new Image(); im.src = URL.createObjectURL(file);
+            try { await new Promise((r, j) => { im.onload = r; im.onerror = j; }); list.push(im); } catch (e) {}
+          }
+          userImg[key] = list; render();
+        });
+        const clr = el('button', { type: 'button', className: 'btn', text: '清除 Clear' });
+        clr.addEventListener('click', () => { userImg[key] = null; inp.value = ''; render(); });
+        fs.appendChild(el('label', { className: 'f' }, [lab, el('div', { className: 'row' }, [inp, clr])]));
+      } else if (f.type === 'audio') {
+        fs.appendChild(buildAudioUI());
       } else if (f.type === 'thumbs') {
         const box = el('div', { className: 'thumbs' });
         f.list().forEach(src => {
@@ -638,6 +767,161 @@ function buildForm() {
     form.appendChild(fs);
   }
 }
+/* ---------- super event music: cut a clip out of any audio / video file ---------- */
+const Au = { ctx: null, buf: null, name: '', start: 0, len: 30, fin: 0, fout: 2, node: null, peaks: null, rec: null };
+const SE_LEN = 30;   // TNO ships 89 super event tracks, 10.7–72 s, mean 30.8 s
+function auCtx() { if (!Au.ctx) Au.ctx = new (window.AudioContext || window.webkitAudioContext)(); return Au.ctx; }
+function auClip() {
+  const b = Au.buf, sr = b.sampleRate;
+  const s0 = Math.max(0, Math.floor(Au.start * sr)), n = Math.max(1, Math.min(b.length - s0, Math.floor(Au.len * sr)));
+  const out = auCtx().createBuffer(b.numberOfChannels, n, sr);
+  const fi = Math.min(n, Math.floor(Au.fin * sr)), fo = Math.min(n, Math.floor(Au.fout * sr));
+  for (let ch = 0; ch < b.numberOfChannels; ch++) {
+    const src = b.getChannelData(ch).subarray(s0, s0 + n), dst = out.getChannelData(ch);
+    dst.set(src);
+    for (let i = 0; i < fi; i++) dst[i] *= i / fi;
+    for (let i = 0; i < fo; i++) dst[n - 1 - i] *= i / fo;
+  }
+  return out;
+}
+function wavBlob(buf) {
+  const ch = Math.min(2, buf.numberOfChannels), n = buf.length, sr = buf.sampleRate;
+  const ab = new ArrayBuffer(44 + n * ch * 2), dv = new DataView(ab);
+  const str = (o, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(o + i, s.charCodeAt(i)); };
+  str(0, 'RIFF'); dv.setUint32(4, 36 + n * ch * 2, true); str(8, 'WAVEfmt '); dv.setUint32(16, 16, true); dv.setUint16(20, 1, true);
+  dv.setUint16(22, ch, true); dv.setUint32(24, sr, true); dv.setUint32(28, sr * ch * 2, true); dv.setUint16(32, ch * 2, true); dv.setUint16(34, 16, true);
+  str(36, 'data'); dv.setUint32(40, n * ch * 2, true);
+  const data = []; for (let c = 0; c < ch; c++) data.push(buf.getChannelData(c));
+  let o = 44;
+  for (let i = 0; i < n; i++) for (let c = 0; c < ch; c++) { const v = Math.max(-1, Math.min(1, data[c][i])); dv.setInt16(o, v < 0 ? v * 0x8000 : v * 0x7FFF, true); o += 2; }
+  return new Blob([ab], { type: 'audio/wav' });
+}
+function saveBlob(blob, name) {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+function auStop() {
+  if (Au.node) { try { Au.node.stop(); } catch (e) {} Au.node = null; }
+  if (Au.rec && Au.rec.state !== 'inactive') Au.rec.stop();
+}
+const fmtT = t => { t = Math.max(0, t); const m = Math.floor(t / 60), s = t - m * 60; return m + ':' + (s < 10 ? '0' : '') + s.toFixed(1); };
+function buildAudioUI() {
+  const box = el('div', { className: 'f' });
+  const file = el('input', { type: 'file', id: 'au-file', accept: 'audio/*,video/*,.mp3,.wav,.ogg,.flac,.m4a,.aac,.mp4,.mkv,.webm,.mov' });
+  const info = el('p', { className: 'hint', id: 'au-info', text: '上传音乐或视频（会自动取出其中的音轨）。默认截取 ' + SE_LEN + ' 秒——TNO 自带的 89 首超事件配乐长 10.7–72 秒，平均约 31 秒。' });
+  const wave = el('canvas', { id: 'au-wave', width: 720, height: 90 });
+  wave.style.cssText = 'width:100%;height:90px;background:#061011;border:1px solid var(--line);border-radius:3px;cursor:pointer;touch-action:none';
+  const start = el('input', { type: 'range', id: 'au-start', min: 0, max: 0, step: 0.05 });
+  const len = el('input', { type: 'range', id: 'au-len', min: 3, max: 120, step: 0.5 });
+  const fin = el('input', { type: 'range', id: 'au-fin', min: 0, max: 5, step: 0.1 });
+  const fout = el('input', { type: 'range', id: 'au-fout', min: 0, max: 8, step: 0.1 });
+  const lStart = el('b'), lLen = el('b'), lFin = el('b'), lFout = el('b');
+  const play = el('button', { type: 'button', className: 'btn primary', text: '试听 Play' });
+  const stop = el('button', { type: 'button', className: 'btn', text: '停止 Stop' });
+  const wav = el('button', { type: 'button', className: 'btn', text: '导出配乐 WAV' });
+  const vid = el('button', { type: 'button', className: 'btn', text: '导出带配乐的视频' });
+  const preset = el('div', { className: 'row' }, [10, 20, 30, 45, 60].map(v => { const b = el('button', { type: 'button', className: 'btn', text: v + ' 秒' + (v === SE_LEN ? '（标准）' : '') }); b.addEventListener('click', () => { Au.len = v; sync(); }); return b; }));
+  const wc = wave.getContext('2d');
+  function drawWave() {
+    const W = wave.width, H = wave.height;
+    wc.clearRect(0, 0, W, H);
+    if (!Au.buf) { wc.fillStyle = '#7f9a96'; wc.font = '14px sans-serif'; wc.fillText('还没有上传音频 / No audio loaded', 14, H / 2 + 5); return; }
+    const d = Au.buf.duration, x0 = Au.start / d * W, x1 = Math.min(W, (Au.start + Au.len) / d * W);
+    wc.fillStyle = 'rgba(89,199,194,.22)'; wc.fillRect(x0, 0, Math.max(2, x1 - x0), H);
+    for (let i = 0; i < W; i++) {
+      const p = Au.peaks[Math.floor(i / W * Au.peaks.length)] || 0, h = Math.max(1, p * (H - 8));
+      wc.fillStyle = (i >= x0 && i <= x1) ? '#8ff0e6' : '#2f5a5e';
+      wc.fillRect(i, (H - h) / 2, 1, h);
+    }
+    wc.fillStyle = '#e08282'; wc.fillRect(x0, 0, 2, H); wc.fillRect(x1 - 2, 0, 2, H);
+  }
+  function sync() {
+    const d = Au.buf ? Au.buf.duration : 0;
+    Au.len = Math.max(1, d ? Math.min(Au.len, d) : Au.len);
+    Au.start = Math.max(0, Math.min(Au.start, Math.max(0, d - Au.len)));
+    start.max = Math.max(0, d - Au.len); start.value = Au.start;
+    len.max = d ? Math.max(3, Math.min(180, Math.floor(d))) : 120; len.value = Au.len; fin.value = Au.fin; fout.value = Au.fout;
+    lStart.textContent = '起点 Start：' + fmtT(Au.start) + ' → ' + fmtT(Au.start + Au.len);
+    lLen.textContent = '长度 Length：' + Au.len.toFixed(1) + ' 秒';
+    lFin.textContent = '淡入 Fade in：' + Au.fin.toFixed(1) + ' 秒'; lFout.textContent = '淡出 Fade out：' + Au.fout.toFixed(1) + ' 秒';
+    drawWave();
+  }
+  file.addEventListener('change', async () => {
+    const f = file.files[0]; if (!f) return;
+    auStop();
+    info.textContent = '正在读取并解码音轨… Decoding';
+    try {
+      const ab = await f.arrayBuffer();
+      const buf = await new Promise((res, rej) => auCtx().decodeAudioData(ab, res, rej));
+      Au.buf = buf; Au.name = f.name.replace(/\.[^.]+$/, '');
+      const N = 1440, peaks = new Float32Array(N), c0 = buf.getChannelData(0), step = Math.max(1, Math.floor(c0.length / N));
+      let mx = 0;
+      for (let i = 0; i < N; i++) { let p = 0; const e = Math.min(c0.length, (i + 1) * step); for (let j = i * step; j < e; j += 16) { const v = Math.abs(c0[j]); if (v > p) p = v; } peaks[i] = p; if (p > mx) mx = p; }
+      if (mx > 0) for (let i = 0; i < N; i++) peaks[i] /= mx;
+      Au.peaks = peaks; Au.start = 0; Au.len = Math.min(SE_LEN, buf.duration);
+      info.textContent = f.name + ' · 全长 ' + fmtT(buf.duration) + ' · ' + buf.sampleRate + ' Hz · ' + buf.numberOfChannels + ' 声道。在波形上点击或拖动来选起点。';
+    } catch (e) {
+      console.error(e);
+      info.textContent = '这个文件的音轨浏览器解不出来（或文件里没有声音）。可以换成 MP3 / WAV / M4A / MP4 再试。';
+    }
+    sync();
+  });
+  const pick = ev => {
+    if (!Au.buf) return;
+    const r = wave.getBoundingClientRect(), t = (ev.clientX - r.left) / r.width * Au.buf.duration;
+    Au.start = t - (ev.shiftKey ? Au.len : 0); sync();
+  };
+  let drag = false;
+  wave.addEventListener('pointerdown', e => { drag = true; wave.setPointerCapture(e.pointerId); pick(e); });
+  wave.addEventListener('pointermove', e => { if (drag) pick(e); });
+  wave.addEventListener('pointerup', () => { drag = false; });
+  start.addEventListener('input', () => { Au.start = +start.value; sync(); });
+  len.addEventListener('input', () => { Au.len = +len.value; sync(); });
+  fin.addEventListener('input', () => { Au.fin = +fin.value; sync(); });
+  fout.addEventListener('input', () => { Au.fout = +fout.value; sync(); });
+  const need = () => { if (!Au.buf) { info.textContent = '请先上传一个音频或视频文件。'; return false; } return true; };
+  play.addEventListener('click', () => {
+    if (!need()) return;
+    auStop(); auCtx().resume();
+    const n = auCtx().createBufferSource(); n.buffer = auClip(); n.connect(auCtx().destination); n.start(); Au.node = n;
+  });
+  stop.addEventListener('click', auStop);
+  wav.addEventListener('click', () => { if (need()) saveBlob(wavBlob(auClip()), 'tno_se_' + (Au.name || 'music') + '.wav'); });
+  vid.addEventListener('click', () => {
+    if (!need()) return;
+    if (!window.MediaRecorder || !cv.captureStream) { info.textContent = '这个浏览器不支持录制视频，请用电脑版 Chrome / Edge。'; return; }
+    auStop(); auCtx().resume();
+    const rc = document.createElement('canvas'); rc.width = cv.width + (cv.width & 1); rc.height = cv.height + (cv.height & 1);
+    const rx = rc.getContext('2d');
+    const paint = () => { rx.fillStyle = '#000'; rx.fillRect(0, 0, rc.width, rc.height); rx.drawImage(cv, 0, 0); };
+    paint();
+    const dest = auCtx().createMediaStreamDestination(), n = auCtx().createBufferSource();
+    n.buffer = auClip(); n.connect(dest); n.connect(auCtx().destination);
+    const stream = new MediaStream([...rc.captureStream(30).getVideoTracks(), ...dest.stream.getAudioTracks()]);
+    const mime = ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'].find(m => MediaRecorder.isTypeSupported(m)) || '';
+    const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 6e6 } : undefined), chunks = [];
+    rec.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+    let timer = setInterval(paint, 33);
+    rec.onstop = () => {
+      clearInterval(timer); try { n.stop(); } catch (e) {}
+      const ext = (rec.mimeType || mime).indexOf('mp4') >= 0 ? 'mp4' : 'webm';
+      saveBlob(new Blob(chunks, { type: rec.mimeType || mime }), 'tno_superevent_' + (Au.name || 'music') + '.' + ext);
+      info.textContent = '视频已导出（' + ext.toUpperCase() + '）。'; vid.disabled = false;
+    };
+    Au.rec = rec; Au.node = n; vid.disabled = true;
+    info.textContent = '正在录制 ' + Au.len.toFixed(1) + ' 秒，请保持这个页面在前台…';
+    rec.start(); n.start();
+    n.onended = () => setTimeout(() => { if (rec.state !== 'inactive') rec.stop(); }, 150);
+  });
+  [file, info, wave, el('label', { className: 'f' }, [el('span', {}, [lStart]), start]), el('label', { className: 'f' }, [el('span', {}, [lLen]), len]), preset,
+    el('div', { className: 'row' }, [el('label', { className: 'f' }, [el('span', {}, [lFin]), fin]), el('label', { className: 'f' }, [el('span', {}, [lFout]), fout])]),
+    el('div', { className: 'row' }, [play, stop, wav, vid]),
+    el('p', { className: 'hint', text: '导出的 WAV 可直接当超事件配乐用；放进 mod 的 music 文件夹前用任意工具转成 OGG 即可。视频会把当前超事件画面配上这段音乐录成一个文件。' })
+  ].forEach(n => box.appendChild(n));
+  sync();
+  return box;
+}
+
 function buildTabs() {
   const nav = $('#tabs'); nav.textContent = '';
   ORDER.forEach(k => {
