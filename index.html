@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>TNO 事件制作器 · TNO Event Maker</title>
+<meta name="description" content="在线制作 TNO（The New Order: Last Days of Europe）风格的超事件、新闻事件、弹窗事件与国家介绍界面，中英文字体与排版取自游戏文件。">
+<style>
+/* layout: sticky preview pane on the left, control column on the right; stacks on phones */
+:root{
+  color-scheme:dark;
+  --bg:#070d0e; --panel:#0e1819; --panel2:#132123; --line:#234043; --line2:#2f5a5e;
+  --fg:#c9dcd6; --dim:#7f9a96; --crt:#59c7c2; --crt2:#8ff0e6; --warn:#e08282; --ok:#85ea8e;
+  --mono:ui-monospace,"Cascadia Mono","SF Mono",Menlo,Consolas,"Noto Sans Mono CJK SC",monospace;
+  --sans:"Segoe UI","PingFang SC","Microsoft YaHei","Noto Sans SC",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 var(--sans)}
+body{padding-block:0 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  background-image:repeating-linear-gradient(0deg,rgba(89,199,194,.035) 0 1px,transparent 1px 3px)}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;padding:14px 0 10px;border-bottom:1px solid var(--line)}
+h1{font:600 18px/1.2 var(--mono);letter-spacing:.06em;margin:0;color:var(--crt2);text-shadow:0 0 12px rgba(89,199,194,.45)}
+h1 small{display:block;font:400 11px/1.4 var(--mono);color:var(--dim);letter-spacing:.14em;text-shadow:none;margin-top:3px}
+.seg{display:inline-flex;border:1px solid var(--line2);border-radius:3px;overflow:hidden}
+.seg button{background:transparent;color:var(--dim);border:0;padding:7px 12px;font:13px var(--sans);cursor:pointer;border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--crt);color:#041011;font-weight:600}
+.seg button:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--crt2);outline-offset:1px}
+.spacer{flex:1}
+nav{display:flex;gap:6px;overflow-x:auto;padding:12px 0;scrollbar-width:thin}
+nav button{flex:none;background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:3px;padding:9px 14px;font:13px var(--sans);cursor:pointer;text-align:left;line-height:1.25}
+nav button span{display:block;font:10px var(--mono);color:var(--dim);letter-spacing:.1em;text-transform:uppercase}
+nav button[aria-selected="true"]{border-color:var(--crt);background:var(--panel2);box-shadow:inset 0 -2px 0 var(--crt)}
+nav button[aria-selected="true"] span{color:var(--crt)}
+main{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,400px);gap:18px;align-items:start}
+@media (max-width:860px){main{grid-template-columns:minmax(0,1fr)}}
+.stage{position:sticky;top:8px;background:#0a0a0a;border:1px solid var(--line);border-radius:4px;padding:12px;min-width:0;
+  background-image:linear-gradient(45deg,#111 25%,transparent 25%,transparent 75%,#111 75%),linear-gradient(45deg,#111 25%,#0b0b0b 25%,#0b0b0b 75%,#111 75%);background-size:20px 20px;background-position:0 0,10px 10px}
+@media (max-width:860px){.stage{position:static}}
+.stage .wrap{display:flex;justify-content:center;overflow:auto;max-height:78vh}
+canvas#cv{max-width:100%;height:auto;display:block;image-rendering:auto}
+.stage.zoom1 .wrap{justify-content:flex-start}
+.stage.zoom1 canvas#cv{max-width:none}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+.btn{background:var(--panel2);color:var(--fg);border:1px solid var(--line2);border-radius:3px;padding:8px 12px;font:13px var(--sans);cursor:pointer}
+.btn.primary{background:var(--crt);border-color:var(--crt);color:#041011;font-weight:600}
+.btn:hover{border-color:var(--crt2)}
+.status{font:12px var(--mono);color:var(--dim);min-height:18px}
+.status.err{color:var(--warn)}
+form{display:flex;flex-direction:column;gap:12px;min-width:0}
+fieldset{border:1px solid var(--line);border-radius:4px;margin:0;padding:10px 12px 12px;background:var(--panel);display:flex;flex-direction:column;gap:10px;min-width:0}
+legend{font:11px var(--mono);letter-spacing:.14em;color:var(--crt);padding:0 6px;text-transform:uppercase}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--dim);min-width:0}
+label.f>span b{color:var(--fg);font-weight:500}
+input[type=text],textarea,select{width:100%;background:#061011;color:var(--fg);border:1px solid var(--line);border-radius:3px;padding:7px 8px;font:14px var(--sans)}
+textarea{resize:vertical;min-height:64px;line-height:1.45}
+input[type=range]{width:100%;accent-color:var(--crt)}
+input[type=file]{font-size:12px;color:var(--dim);max-width:100%}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row>label.f{flex:1 1 90px}
+.chk{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--fg)}
+.thumbs{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px}
+.thumbs button{flex:none;border:1px solid var(--line);background:#000;padding:0;border-radius:2px;cursor:pointer;width:64px;height:44px;overflow:hidden}
+.thumbs button img{width:100%;height:100%;object-fit:cover;display:block}
+.thumbs button.wide{width:150px;height:26px;background:#cfc9b8}
+.thumbs button.wide img{object-fit:contain}
+.hint{font-size:12px;color:var(--dim);line-height:1.5;margin:0}
+.hint code{font:12px var(--mono);color:var(--crt2);background:#061011;padding:0 4px;border-radius:2px}
+.sw{display:flex;flex-wrap:wrap;gap:4px}
+.sw button{font:11px var(--mono);border:1px solid var(--line);background:#061011;border-radius:2px;padding:2px 6px;cursor:pointer}
+footer{margin-top:28px;padding-top:12px;border-top:1px solid var(--line);font-size:12px;color:var(--dim);line-height:1.6}
+#out{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:20;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px}
+#out img{max-width:100%;max-height:78vh;object-fit:contain;border:1px solid var(--line2)}
+@media (prefers-reduced-motion:no-preference){.btn,nav button{transition:border-color .12s}}
+</style>
+</head>
+<body>
+<header>
+  <h1>TNO 事件制作器<small>THE NEW ORDER · EVENT MAKER</small></h1>
+  <div class="spacer"></div>
+  <div class="seg" role="group" aria-label="游戏语言 Game language">
+    <button type="button" id="lang-zh" aria-pressed="true">中文（汉化版）</button>
+    <button type="button" id="lang-en" aria-pressed="false">English (original)</button>
+  </div>
+</header>
+<nav role="tablist" id="tabs"></nav>
+<main>
+  <section class="stage" id="stage">
+    <div class="wrap"><canvas id="cv" width="590" height="527"></canvas></div>
+    <div class="bar">
+      <button class="btn primary" type="button" id="dl">下载 PNG</button>
+      <button class="btn" type="button" id="dl2">下载 2×</button>
+      <button class="btn" type="button" id="show">长按保存（手机）</button>
+      <button class="btn" type="button" id="zoom">原始像素 1:1</button>
+      <span class="spacer"></span>
+      <button class="btn" type="button" id="reset">恢复示例</button>
+    </div>
+    <div class="status" id="status">正在加载字体…</div>
+  </section>
+  <form id="form" autocomplete="off" onsubmit="return false"></form>
+</main>
+<footer>
+  界面贴图、位图字体与坐标取自《The New Order: Last Days of Europe》及其汉化 mod 的游戏文件，版权归各自作者所有；本页为非官方同人工具，图片只在你的浏览器里合成，不会上传。<br>
+  文字里可以用游戏的颜色代码：<code>§Y黄色§!</code>、<code>§R红§!</code>、<code>§G绿§!</code>、<code>§W白§!</code>；换行直接回车或写 <code>\n</code>。
+</footer>
+<div id="out" hidden>
+  <img id="outimg" alt="生成的图片">
+  <div class="row"><span class="hint">长按图片保存到相册 / Long-press to save</span><button class="btn" type="button" id="outclose">关闭</button></div>
+</div>
+<script src="assets/manifest.js"></script>
+<script src="fonts/chains.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
