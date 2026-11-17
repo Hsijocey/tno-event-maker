@@ -757,6 +757,8 @@ function fxText(c, text, chain, o) {
   fxTc.globalCompositeOperation = 'source-over';
   fxTc.clearRect(0, 0, fxT.width, fxT.height);
   drawLayout(fxTc, L, pad, pad, bw, o.align === 'left' ? 'left' : 'center');
+  // faux bold for thin bitmap fonts: stamp the text again, shifted sideways
+  for (let i = 1; i <= (o.bold || 0); i++) fxTc.drawImage(fxT, 0, 0, W, H, 1, 0, W, H);
   fxTc.globalCompositeOperation = 'source-atop';
   const dark = o.dark == null ? 0.3 : o.dark, soft = o.soft == null ? 2 : o.soft;
   L.lines.forEach((ln, i) => {
@@ -953,7 +955,7 @@ T.cwn = {
     const common = { split: zh ? 0.55 : 0.6, dark: 0.3, glow: 0.2 };
     // Red Dusk: Title at (14,115) width 551 centred; Description at (31,181) width 512; option centred on the bar
     if (zh) fxText(ctx, s.title, [zt], Object.assign({ cx: 579, y: 245, em: 42, pitch: 56, align: 'center', maxLines: 1 }, common));
-    else fxText(ctx, s.title, [et, zt], Object.assign({ cx: 579, y: 243, em: 46, pitch: 56, align: 'center', maxLines: 1, fontScale: 46 / 36 }, common));
+    else fxText(ctx, s.title, [et, zt], Object.assign({ cx: 579, y: 243, em: 46, pitch: 56, align: 'center', maxLines: 1, fontScale: 46 / 36, bold: 1 }, common));
     const barTop = (H - 205) * 2, top = 340, pitch = zh ? 40 : 38;
     fxText(ctx, s.desc, zh ? [zb] : [eb, zb], Object.assign({ x: 62, y: top, w: 1030, em: 28, pitch, track: zh ? 1 : 0, align: 'left', maxLines: Math.max(1, Math.floor((barTop - 24 - top) / pitch)) }, common));
     const oem = 30, ocy = (H - 184.5) * 2;
