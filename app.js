@@ -948,6 +948,9 @@ T.dv = {
     { title: '界面文字 Labels', fields: [
       { k: 'tab1', type: 'text', label: '左标签', zh: '外交', en: 'Diplomacy' },
       { k: 'tab2', type: 'text', label: '右标签', zh: '详细', en: 'Details' }
+    ] },
+    { title: '版式 Layout', fields: [
+      { k: 'spirits', type: 'check', label: '显示国家精神框（取消 = 不带国家精神框的版本）', def: true }
     ] }
   ],
   async draw(s, lang) {
@@ -955,7 +958,7 @@ T.dv = {
     const [win, upper, lframe, tab, spirits, pov, gbtn, gfr, gfill, fov, unk] = await Promise.all(['dv_window.png', 'dv_upper_bg.png', 'dv_leader_frame.png', 'dv_tab.png',
       lang === 'zh' ? 'dv_spirits_zh.png' : 'dv_spirits_en.png', 'dv_pie_overlay.png', 'dv_goal_button.png', 'pol_goal_progress_frame.png', 'pol_goal_progress.png', 'dv_flag_overlay.png', 'leader_unknown.png'].map(A));
     const OY = 16;   // canvas y of country_info's origin (the tabs sit 8px above it)
-    cv.width = 550; cv.height = OY + 384; ctx.clearRect(0, 0, cv.width, cv.height);
+    cv.width = 550; cv.height = OY + (s.spirits ? 384 : 280); ctx.clearRect(0, 0, cv.width, cv.height);
     cornered(ctx, win, 0, 0, 549, cv.height, 64, 64, true);
     ctx.save(); ctx.translate(0, OY);
     ctx.drawImage(upper, 139, 28);
@@ -970,7 +973,7 @@ T.dv = {
       ctx.drawImage(tab, 0, 0, 258, 42, x, -8, 258, 42);
       textBox(ctx, t, b16, 'Bomb_16', { x, y: -8, w: 258, h: 42, fmt: 'center', vcenter: true, maxLines: 1 });
     });
-    ctx.drawImage(spirits, 16, 263);
+    if (s.spirits) ctx.drawImage(spirits, 16, 263);
     // diplomacy_tab_top (0,33): portrait, leader frame, pie, ruling party, active focus
     const por = userImg['dv.portrait'] || (s.samples ? unk : null);
     if (por) {
