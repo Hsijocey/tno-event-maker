@@ -16,7 +16,7 @@ function loadImg(src) {
   });
   return imgCache[src];
 }
-const ASSET_VER = '5';   // bump when a texture in assets/ is regenerated
+const ASSET_VER = '6';   // bump when a texture in assets/ is regenerated
 const A = n => loadImg('assets/' + n + '?v=' + ASSET_VER);
 
 /* ---------- bitmap fonts ---------- */
@@ -849,11 +849,7 @@ function dpGroups(kind) {
     { title: '图片 Pictures', fields: [
       ...picFields('portrait', '领袖头像 Portrait'),
       { k: 'flag', type: 'image', label: '国旗 Flag' },
-      { k: 'faction', type: 'image', label: '阵营图标（上栏左侧）' },
-      { k: 'emblem', type: 'image', label: '意识形态徽章（上栏右侧）' },
-      { k: 'focus', type: 'image', label: '国策图标（饼图下方小屏）' },
-      { k: 'iconscale', type: 'range', label: '图标大小 %（100 = 与工程里一致）', min: 50, max: 150, step: 1, def: 100 },
-      { k: 'samples', type: 'check', label: '没上传时显示示例头像和图标', def: true },
+      { k: 'samples', type: 'check', label: '没上传头像时显示剪影', def: true },
       { k: 'pie', type: 'textarea', rows: 5, label: '饼图：每行「百分比 颜色」',
         zh: '8 #303030\n14 #7a261f\n14 #1f2f78\n22 #2a2a2a\n20 #333333\n22 #3b3b3b', en: '8 #303030\n14 #7a261f\n14 #1f2f78\n22 #2a2a2a\n20 #333333\n22 #3b3b3b' }
     ] }
@@ -896,12 +892,7 @@ async function drawPanel(kind, key, s, lang) {
   }
   if (glass) ctx.drawImage(glass, 0, 0);
   ctx.drawImage(frame, 0, 0);
-  // icons on top of the dark screens
-  const samples = { faction: 'samples/dp_faction.png', emblem: 'samples/dp_emblem.png', focus: 'samples/dp_focus.png' };
-  for (const k of ['faction', 'emblem', 'focus']) {
-    const im = img(k) || (s.samples ? await A(samples[k]) : null);
-    if (im) fitSlot(ctx, im, P[k][0], P[k][1], P[k][2], P[k][3], (+s.iconscale || 100) / 100);
-  }
+  // icon screens (faction / ideology emblem / focus) stay empty: the user pastes icons in themselves (2026-11-17)
   // text
   const cInfo = zh ? [zyI] : [oxI, zyI], cParty = zh ? [zyP] : [oxP, zyP];
   const eI = cInfo[0].lh, eP = cParty[0].lh, split = zh ? 0.55 : 0.61, dark = zh ? 0.3 : 0.28;
@@ -1386,7 +1377,25 @@ function download(scale) {
 }
 $('#dl').addEventListener('click', () => download(1));
 $('#dl2').addEventListener('click', () => download(T[cur].scale === 2 ? 0.5 : 2));
-$('#show').addEventListener('click', () => { $('#outimg').src = cv.toDataURL('image/png'); $('#out').hidden = false; });
+/* phone save: a data: URL image often cannot be long-pressed/saved on phones (too big, or the in-app browser refuses it).
+   Show a real blob: image at 1x, offer the system share sheet ("save image") where it exists, and an "open in new page" link. */
+let outURL = null, outBlob = null;
+function phoneCanvas() { return T[cur].scale === 2 ? exportCanvas(0.5) : cv; }
+$('#show').addEventListener('click', () => {
+  phoneCanvas().toBlob(b => {
+    if (!b) return;
+    if (outURL) URL.revokeObjectURL(outURL);
+    outBlob = b; outURL = URL.createObjectURL(b);
+    $('#outimg').src = outURL; $('#outopen').href = outURL;
+    $('#outshare').hidden = !(navigator.canShare && navigator.canShare({ files: [new File([b], 'x.png', { type: 'image/png' })] }));
+    $('#out').hidden = false;
+  }, 'image/png');
+});
+$('#outshare').addEventListener('click', async () => {
+  if (!outBlob) return;
+  try { await navigator.share({ files: [new File([outBlob], 'tno_' + cur + '_' + lang + '.png', { type: 'image/png' })] }); }
+  catch (e) { if (e && e.name !== 'AbortError') $('#outhint').textContent = '这个浏览器不让分享图片，请长按图片或点「新页面打开」再保存。'; }
+});
 $('#outclose').addEventListener('click', () => { $('#out').hidden = true; });
 $('#out').addEventListener('click', e => { if (e.target.id === 'out') $('#out').hidden = true; });
 $('#zoom').addEventListener('click', () => { const on = $('#stage').classList.toggle('zoom1');
