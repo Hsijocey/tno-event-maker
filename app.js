@@ -240,7 +240,7 @@ T.se = {
     { title: '图片 Picture', fields: [
       { k: 'preset', type: 'thumbs', label: '游戏原图 Game pictures', list: () => window.TNO_ASSETS.se.map(n => 'assets/se/' + n + '.png'), def: 'assets/se/german_civil_war.png' },
       ...picFields('pic', '上传自己的图片 Upload (573×455)'),
-      { k: 'filter', type: 'select', label: '滤镜 Filter', def: 'teal', opts: [['teal', '青蓝 CRT 滤镜（原版风格，自动转黑白）'], ['raw', '不加滤镜（保留彩色）']] },
+      { k: 'filter', type: 'select', label: '滤镜 Filter', def: 'teal', opts: [['teal', '青蓝 CRT 滤镜 + 扫描线（原版风格，自动转黑白）'], ['rawscan', '保留原色 + 扫描线'], ['raw', '保留原色，不加扫描线']] },
       { k: 'scan', type: 'range', label: '扫描线强度 Scanlines', min: 0, max: 2, step: 0.05, def: 1 },
       { k: 'underlay', type: 'check', label: '文字暗色衬底 Text underlay', def: true },
       { k: 'nuke', type: 'check', label: '核战版外框 Nuclear-war frame', def: false }
@@ -259,7 +259,7 @@ T.se = {
     textBox(ctx, s.title, fTitle, 'aldrich_24_outline', { x: 7, y: -45 + 18, w: 580, fmt: 'center' });
     // picture at (6,7)
     const up = userImg['se.pic'];
-    if (up) ctx.drawImage(fxCanvas(up, 573, 455, pp(s, 'pic'), s.filter, s.filter === 'teal' ? +s.scan : 0), 6, 7);
+    if (up) ctx.drawImage(fxCanvas(up, 573, 455, pp(s, 'pic'), s.filter === 'teal' ? 'teal' : 'raw', s.filter === 'raw' ? 0 : +s.scan), 6, 7);
     else ctx.drawImage(await loadImg(s.preset), 6, 7);
     // frame container 585x480
     cornered(ctx, border, 0, 0, 585, 480, 64, 71, false);
@@ -645,13 +645,91 @@ T.ci = {
 };
 
 /* ---------- state + UI ---------- */
+/* === The user's own "new UI" super event (凉的小模板100.ipv): cold-war frame, FZZJ-WHJZTJW text with a
+       darkened lower half ("3D" look) and a soft halo. Drawn at 2x (frame is 602x454 at 1x). === */
+function nuPicture(im, w, h, p, mode) {
+  const t = fxCanvas(im, w, h, p, mode === 'raw' ? 'raw' : 'gray', 0);
+  if (mode !== 'bwca') return t;
+  const tc = t.getContext('2d'), d = tc.getImageData(0, 0, w, h), a = d.data, src = new Uint8ClampedArray(a), sh = 5;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = (y * w + x) * 4, xl = Math.max(0, x - sh), xr = Math.min(w - 1, x + sh);
+    a[i] = src[(y * w + xr) * 4]; a[i + 2] = src[(y * w + xl) * 4 + 2];
+  }
+  tc.putImageData(d, 0, 0);
+  return t;
+}
+const nuT = document.createElement('canvas'), nuTc = nuT.getContext('2d');
+/* centred text block; `split` = where (in em from the line top) the lower half starts to be darkened */
+function nuText(c, text, font, o) {
+  const st = { def: [255, 255, 255], cols: COL_BOMB };
+  const L = layout(text, [font], o.w, st);
+  L.lh = o.pitch; L.height = L.lines.length * o.pitch;
+  if (o.maxLines && L.lines.length > o.maxLines) { L.lines.length = o.maxLines; L.height = o.maxLines * o.pitch; }
+  const pad = 30, W = o.w + pad * 2, H = L.height + o.em + pad * 2;
+  if (nuT.width < W || nuT.height < H) { nuT.width = Math.max(W, nuT.width); nuT.height = Math.max(H, nuT.height); }
+  nuTc.globalCompositeOperation = 'source-over';
+  nuTc.clearRect(0, 0, nuT.width, nuT.height);
+  drawLayout(nuTc, L, pad, pad, o.w, 'center');
+  nuTc.globalCompositeOperation = 'source-atop';
+  L.lines.forEach((ln, i) => {
+    const y = pad + i * o.pitch + o.split * o.em;
+    nuTc.fillStyle = 'rgba(0,0,0,0.11)'; nuTc.fillRect(0, y - 2, W, 2);
+    nuTc.fillStyle = 'rgba(0,0,0,0.325)'; nuTc.fillRect(0, y, W, o.pitch - o.split * o.em + (i === L.lines.length - 1 ? o.em : 0));
+  });
+  nuTc.globalCompositeOperation = 'source-over';
+  const x = Math.round(o.cx - o.w / 2) - pad, y = o.y - pad, OFF = 4000;
+  c.save();
+  c.shadowOffsetX = OFF; c.shadowOffsetY = 0;
+  c.shadowColor = 'rgba(0,0,0,0.9)'; c.shadowBlur = 5; c.drawImage(nuT, 0, 0, W, H, x - OFF, y + 1, W, H);
+  c.shadowColor = 'rgba(0,0,0,0.9)'; c.shadowBlur = 5; c.drawImage(nuT, 0, 0, W, H, x - OFF, y + 1, W, H);
+  c.shadowColor = 'rgba(255,255,255,' + o.glow + ')'; c.shadowBlur = 14; c.drawImage(nuT, 0, 0, W, H, x - OFF, y, W, H);
+  c.restore();
+  c.drawImage(nuT, 0, 0, W, H, x, y, W, H);
+}
+T.nu = {
+  name: '新 UI 超事件', en: 'New UI Super Event',
+  groups: [
+    { title: '文字 Text', fields: [
+      { k: 'title', type: 'text', label: '标题 Title', zh: '黑色方案', en: 'CASE BLACK' },
+      { k: 'quote', type: 'textarea', label: '引言 Quote（回车换行）', rows: 4,
+        zh: '“叛乱就会遭到镇压，这是永恒不变的铁律\n阿道夫 希特勒”', en: '"Rebellion will be crushed. That is the eternal law."\nAdolf Hitler' },
+      { k: 'option', type: 'text', label: '按钮 Button', zh: '亡羊补牢', en: 'Too Late' }
+    ] },
+    { title: '图片 Picture', fields: [
+      { k: 'preset', type: 'thumbs', label: '示例图 Sample pictures', list: () => window.TNO_ASSETS.se.map(n => 'assets/se/' + n + '.png'), def: 'assets/se/great_asian_war.png' },
+      ...picFields('pic', '上传自己的图片 Upload (558×326)'),
+      { k: 'filter', type: 'select', label: '图片处理 Picture', def: 'bwca', opts: [['bwca', '黑白 + 红蓝色散（同工程文件里的效果）'], ['bw', '黑白'], ['raw', '保留原色']] }
+    ] },
+    { title: '配乐 Music', fields: [{ k: 'music', type: 'audio' }] }
+  ],
+  async draw(s, lang) {
+    const [ft, fq, fb] = await Promise.all(['nu_title', 'nu_quote', 'nu_button'].map(loadFont));
+    const [base, glass, frame] = await Promise.all(['nu_base.png', 'nu_glass.png', 'nu_frame.png'].map(A));
+    cv.width = 1204; cv.height = 908; ctx.clearRect(0, 0, cv.width, cv.height);
+    ctx.drawImage(base, 0, 0);
+    const im = userImg['nu.pic'] || await loadImg(s.preset);
+    ctx.save();
+    ctx.beginPath();
+    const x = 42, y = 140, w = 1116, h = 652, r = 24;
+    ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); ctx.clip();
+    ctx.drawImage(nuPicture(im, w, h, userImg['nu.pic'] ? pp(s, 'pic') : null, s.filter), x, y);
+    ctx.restore();
+    ctx.drawImage(glass, 0, 0);
+    ctx.drawImage(frame, 0, 0);
+    // sizes/positions measured from the .ipv composite (1x: title 21px, quote 15px, button 16px, 1px stroke, +1 tracking)
+    nuText(ctx, s.title, ft, { cx: 601, y: 48, w: 1000, em: 42, pitch: 60, split: 0.58, glow: 0.3, maxLines: 1 });
+    nuText(ctx, s.quote, fq, { cx: 601, y: 588, w: 1040, em: 30, pitch: 47, split: 0.47, glow: 0.25, maxLines: 4 });
+    nuText(ctx, s.option, fb, { cx: 593, y: 819, w: 440, em: 32, pitch: 48, split: 0.556, glow: 0.25, maxLines: 1 });
+  }
+};
+
 /* sound library tab: keeps showing the super event, lists the bundled sounds */
 T.sfx = {
   name: '音效素材库', en: 'Sound Library',
   groups: [{ title: '免费音效素材 Free sounds', fields: [{ k: 'lib', type: 'sfxlib' }] }],
   draw(s, lang) { return T.se.draw(getState('se', lang), lang); }
 };
-const ORDER = ['se', 'sfx', 'news', 'report', 'pol', 'cs', 'ci'];
+const ORDER = ['se', 'nu', 'sfx', 'news', 'report', 'pol', 'cs', 'ci'];
 let cur = 'se', lang = 'zh';
 let store = {};
 try { store = JSON.parse(localStorage.getItem('tno-maker-v1') || '{}') || {}; } catch (e) { store = {}; }
@@ -764,6 +842,7 @@ function buildForm() {
           b.addEventListener('click', () => {
             setVal(cur, f, src);
             if (cur === 'se') userImg['se.pic'] = null;
+            if (cur === 'nu') userImg['nu.pic'] = null;
             if (cur === 'news') userImg['news.hdr'] = null;
             render();
           });
