@@ -19,11 +19,11 @@ function loadImg(src) {
 const A = n => loadImg('assets/' + n);
 
 /* ---------- bitmap fonts ---------- */
-const fontCache = {};
+const fontCache = {}, FONT_VER = '3';   // bump when an atlas is rebuilt so browsers do not keep the old one
 function loadFont(name) {
   if (!fontCache[name]) fontCache[name] = new Promise((res, rej) => {
     const s = document.createElement('script');
-    s.src = 'fonts/' + name + '.js';
+    s.src = 'fonts/' + name + '.js?v=' + FONT_VER;
     s.onerror = () => rej(new Error('无法加载字体 ' + name));
     s.onload = () => {
       const d = window.TNOFONT[name];
@@ -38,7 +38,7 @@ function loadFont(name) {
       const kern = new Map();
       d.kern.forEach(k => kern.set(k[0] * 65536 + k[1], k[2]));
       d.data = null;
-      loadImg('fonts/' + d.img).then(im => res({ name, lh: d.lh, base: d.base, map, kern, img: im }), rej);
+      loadImg('fonts/' + d.img + '?v=' + FONT_VER).then(im => res({ name, lh: d.lh, base: d.base, map, kern, img: im }), rej);
     };
     document.head.appendChild(s);
   });
@@ -707,7 +707,7 @@ T.nu = {
     { title: '配乐 Music', fields: [{ k: 'music', type: 'audio' }] }
   ],
   async draw(s, lang) {
-    const [ft, fq, fb] = await Promise.all(['nu_title', 'nu_quote', 'nu_button'].map(loadFont));
+    const [ft, fb] = await Promise.all(['nu_title', 'nu_button'].map(loadFont)), fq = fb;
     const [base, glass, frame] = await Promise.all(['nu_base.png', 'nu_glass.png', 'nu_frame.png'].map(A));
     cv.width = 1204; cv.height = 908; ctx.clearRect(0, 0, cv.width, cv.height);
     ctx.drawImage(base, 0, 0);
@@ -720,10 +720,10 @@ T.nu = {
     ctx.restore();
     ctx.drawImage(glass, 0, 0);
     ctx.drawImage(frame, 0, 0);
-    // sizes/positions measured from the .ipv composite (1x: title 23px/-1 tracking, quote 19px/-2.5, button 19px/-2, no stroke)
-    nuText(ctx, s.title, ft, { cx: 599, y: 46, w: 1000, em: 46, pitch: 60, split: 0.58, glow: 0.3, maxLines: 1 });
-    nuText(ctx, s.quote, fq, { cx: 594, y: 585, w: 1040, em: 38, pitch: 47, split: 0.44, glow: 0.25, maxLines: 4 });
-    nuText(ctx, s.option, fb, { cx: 584, y: 815, w: 440, em: 38, pitch: 48, split: 0.537, glow: 0.25, maxLines: 1 });
+    // 方正综艺简体 (FZZYJW--GB1-0), sizes fitted to the .ipv composite: 1x title 21px, quote and button 17px, no tracking
+    nuText(ctx, s.title, ft, { cx: 600, y: 46, w: 1000, em: 42, pitch: 60, split: 0.624, glow: 0.3, maxLines: 1 });
+    nuText(ctx, s.quote, fq, { cx: 587, y: 583, w: 1040, em: 34, pitch: 50, split: 0.53, glow: 0.25, maxLines: 4 });
+    nuText(ctx, s.option, fb, { cx: 586, y: 816, w: 440, em: 34, pitch: 48, split: 0.585, glow: 0.25, maxLines: 1 });
   }
 };
 
