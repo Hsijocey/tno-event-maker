@@ -778,6 +778,23 @@ function fxText(c, text, chain, o) {
     c.drawImage(fxS, 0, 0, SW, SH, bx - pad - m, Math.round(o.y) - pad - m, SW, SH);
   }
 }
+/* icon into a slot: trim the transparent margin (soft glow excluded), then scale so the visible artwork fills the slot */
+function fitSlot(c, im, cx, cy, w, h, mul) {
+  if (!im._trim) {
+    const t = document.createElement('canvas'); t.width = im.naturalWidth || im.width; t.height = im.naturalHeight || im.height;
+    const tc = t.getContext('2d'); tc.drawImage(im, 0, 0);
+    let x0 = t.width, y0 = t.height, x1 = -1, y1 = -1;
+    try {
+      const d = tc.getImageData(0, 0, t.width, t.height).data;
+      for (let y = 0; y < t.height; y++) for (let x = 0; x < t.width; x++) if (d[(y * t.width + x) * 4 + 3] > 96) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    } catch (e) {}
+    im._trim = x1 < 0 ? [0, 0, t.width, t.height] : [x0, y0, x1 - x0 + 1, y1 - y0 + 1];
+  }
+  const [tx, ty, tw, th] = im._trim, sc = Math.min(w / tw, h / th) * (mul || 1);
+  c.imageSmoothingQuality = 'high';
+  // draw the whole image (glow included) so that its trimmed box is centred on the slot
+  c.drawImage(im, Math.round(cx - (tx + tw / 2) * sc), Math.round(cy - (ty + th / 2) * sc), (im.naturalWidth || im.width) * sc, (im.naturalHeight || im.height) * sc);
+}
 function rrPath(c, x, y, w, h, r) {
   c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath();
 }
@@ -785,13 +802,13 @@ function rrPath(c, x, y, w, h, r) {
 const DP = {
   b: { W: 1264, H: 650, frame: 'dpB_frame.png', clean: 'dpB_frame_clean.png',
     flag: [116, 130, 152, 92, 0], portrait: [70, 254, 240, 322, 0], pie: [424.6, 387.4, 51],
-    faction: [417, 229, 148, 116], emblem: [1066, 229, 118, 118], focus: [425, 539, 170, 128],
+    faction: [423, 228, 158, 125], emblem: [1066, 229, 120, 122], focus: [425, 539, 182, 135],   // icon slots = visible icon sizes in the project x2
     zh: { info: { x: 502, y: 182, pitch: 36, track: 1.33 }, party: { x: 568, y: 335, pitch: 44.4, track: 2 }, btn: { cx: 824, y: 512, track: 2 } },
     en: { info: { x: 512, y: 183, pitch: 36 }, party: { x: 567, y: 336, pitch: 45 }, btn: { cx: 835, y: 513 } },
     labels: { tab1: { cx: 536, y: 116 }, tab2: { cx: 943, y: 118 }, side: { cx: 1169, cy: 329 } } },
   a: { W: 1320, H: 660, frame: 'dpA_frame.png', base: 'dpA_base.png', glass: 'dpA_glass.png',
     flag: [110, 122, 180, 98, 12], portrait: [72, 256, 250, 342, 20], pie: [441.5, 394, 55],
-    faction: [439, 235.5, 140, 94], emblem: [1122, 235.5, 112, 94], focus: [441.5, 547, 148, 124],
+    faction: [445, 235.5, 155, 123], emblem: [1122, 235.5, 118, 120], focus: [441.5, 547, 179, 133],   // same icon sizes as B (x1.965), not shrunk to the screen
     zh: { info: { x: 524, y: 186, pitch: 34, track: 1 }, party: { x: 609, y: 351, pitch: 44, track: 1.5 }, btn: { cx: 835, y: 527, track: 1.5 } },
     en: { info: { x: 526, y: 189, pitch: 34 }, party: { x: 609, y: 351, pitch: 44 }, btn: { cx: 835, y: 529 } } }
 };
@@ -809,6 +826,7 @@ function dpGroups(kind) {
       { k: 'faction', type: 'image', label: '阵营图标（上栏左侧）' },
       { k: 'emblem', type: 'image', label: '意识形态徽章（上栏右侧）' },
       { k: 'focus', type: 'image', label: '国策图标（饼图下方小屏）' },
+      { k: 'iconscale', type: 'range', label: '图标大小 %（100 = 与工程里一致）', min: 50, max: 150, step: 1, def: 100 },
       { k: 'samples', type: 'check', label: '没上传时显示示例头像和图标', def: true },
       { k: 'pie', type: 'textarea', rows: 5, label: '饼图：每行「百分比 颜色」',
         zh: '8 #303030\n14 #7a261f\n14 #1f2f78\n22 #2a2a2a\n20 #333333\n22 #3b3b3b', en: '8 #303030\n14 #7a261f\n14 #1f2f78\n22 #2a2a2a\n20 #333333\n22 #3b3b3b' }
@@ -854,7 +872,7 @@ async function drawPanel(kind, key, s, lang) {
   const samples = { faction: 'samples/dp_faction.png', emblem: 'samples/dp_emblem.png', focus: 'samples/dp_focus.png' };
   for (const k of ['faction', 'emblem', 'focus']) {
     const im = img(k) || (s.samples ? await A(samples[k]) : null);
-    if (im) fitIn(ctx, im, P[k][0] - P[k][2] / 2, P[k][1] - P[k][3] / 2, P[k][2], P[k][3], 8);
+    if (im) fitSlot(ctx, im, P[k][0], P[k][1], P[k][2], P[k][3], (+s.iconscale || 100) / 100);
   }
   // text
   const cInfo = zh ? [zy28] : [ox26, zy28], cParty = zh ? [zy32] : [ox30, zy32];
