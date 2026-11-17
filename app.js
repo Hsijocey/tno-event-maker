@@ -763,6 +763,9 @@ async function doRender() {
   const off = document.createElement('canvas');
   try {
     await T[t].draw(getState(t, lg), lg);
+    // keep the preview in proportion even if a stale cached page still has the old stylesheet
+    if (!$('#stage').classList.contains('zoom1')) { cv.style.width = 'auto'; cv.style.height = 'auto'; cv.style.maxWidth = '100%'; cv.style.maxHeight = '78vh'; cv.style.flex = 'none'; cv.style.aspectRatio = cv.width + ' / ' + cv.height; }
+    cv.parentNode.style.alignItems = 'flex-start';
     if (seq !== renderSeq) return render();
     statusEl.textContent = cv.width + ' × ' + cv.height + ' px · ' + (lg === 'zh' ? '汉化版字体' : 'English fonts');
   } catch (e) {
@@ -1142,7 +1145,8 @@ $('#dl2').addEventListener('click', () => download(2));
 $('#show').addEventListener('click', () => { $('#outimg').src = cv.toDataURL('image/png'); $('#out').hidden = false; });
 $('#outclose').addEventListener('click', () => { $('#out').hidden = true; });
 $('#out').addEventListener('click', e => { if (e.target.id === 'out') $('#out').hidden = true; });
-$('#zoom').addEventListener('click', () => { const on = $('#stage').classList.toggle('zoom1'); $('#zoom').textContent = on ? '适应宽度' : '原始像素 1:1'; });
+$('#zoom').addEventListener('click', () => { const on = $('#stage').classList.toggle('zoom1');
+  if (on) { cv.style.maxWidth = 'none'; cv.style.maxHeight = 'none'; cv.style.width = cv.width + 'px'; cv.style.height = cv.height + 'px'; } else render(); $('#zoom').textContent = on ? '适应宽度' : '原始像素 1:1'; });
 $('#reset').addEventListener('click', () => {
   delete store[cur]; save();
   Object.keys(userImg).forEach(k => { if (k.startsWith(cur + '.')) userImg[k] = null; });
