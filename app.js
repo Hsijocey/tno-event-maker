@@ -716,10 +716,10 @@ T.nu = {
     ctx.restore();
     ctx.drawImage(glass, 0, 0);
     ctx.drawImage(frame, 0, 0);
-    // sizes/positions measured from the .ipv composite (1x: title 21px, quote 15px, button 16px, 1px stroke, +1 tracking)
-    nuText(ctx, s.title, ft, { cx: 601, y: 48, w: 1000, em: 42, pitch: 60, split: 0.58, glow: 0.3, maxLines: 1 });
-    nuText(ctx, s.quote, fq, { cx: 601, y: 588, w: 1040, em: 30, pitch: 47, split: 0.47, glow: 0.25, maxLines: 4 });
-    nuText(ctx, s.option, fb, { cx: 593, y: 819, w: 440, em: 32, pitch: 48, split: 0.556, glow: 0.25, maxLines: 1 });
+    // sizes/positions measured from the .ipv composite (1x: title 23px/-1 tracking, quote 19px/-2.5, button 19px/-2, no stroke)
+    nuText(ctx, s.title, ft, { cx: 599, y: 46, w: 1000, em: 46, pitch: 60, split: 0.58, glow: 0.3, maxLines: 1 });
+    nuText(ctx, s.quote, fq, { cx: 594, y: 585, w: 1040, em: 38, pitch: 47, split: 0.44, glow: 0.25, maxLines: 4 });
+    nuText(ctx, s.option, fb, { cx: 584, y: 815, w: 440, em: 38, pitch: 48, split: 0.537, glow: 0.25, maxLines: 1 });
   }
 };
 
