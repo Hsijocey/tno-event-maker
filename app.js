@@ -16,11 +16,11 @@ function loadImg(src) {
   });
   return imgCache[src];
 }
-const ASSET_VER = '3';   // bump when a texture in assets/ is regenerated
+const ASSET_VER = '4';   // bump when a texture in assets/ is regenerated
 const A = n => loadImg('assets/' + n + '?v=' + ASSET_VER);
 
 /* ---------- bitmap fonts ---------- */
-const fontCache = {}, FONT_VER = '4';   // bump when an atlas is rebuilt so browsers do not keep the old one
+const fontCache = {}, FONT_VER = '5';   // bump when an atlas is rebuilt so browsers do not keep the old one
 function loadFont(name) {
   if (!fontCache[name]) fontCache[name] = new Promise((res, rej) => {
     const s = document.createElement('script');
@@ -810,8 +810,9 @@ const DP = {
   a: { W: 1320, H: 660, frame: 'dpA_frame.png', base: 'dpA_base.png', glass: 'dpA_glass.png',
     flag: [110, 122, 180, 98, 12], portrait: [72, 256, 250, 342, 20], pie: [441.5, 394, 55],
     faction: [447, 235.5, 124, 98], emblem: [1117, 235.5, 94, 96], focus: [441.5, 547, 143, 106],   // = B's three slots x0.8 (one factor for all three, so the icons keep their relative sizes)   // icons fill their screens the way they do in B (about 95% of the screen height), never over the bezel
-    zh: { info: { x: 524, y: 186, pitch: 34, track: 1 }, party: { x: 609, y: 351, pitch: 44, track: 1.5 }, btn: { cx: 835, y: 527, track: 1.5 } },
-    en: { info: { x: 526, y: 189, pitch: 34 }, party: { x: 609, y: 351, pitch: 44 }, btn: { cx: 835, y: 529 } } }
+    fonts: { zi: 'zy_26', zp: 'zy_30', ei: 'ox_24', ep: 'ox_28' },
+    zh: { info: { x: 524, y: 189, pitch: 32, track: 1 }, party: { x: 609, y: 351, pitch: 41, track: 1.5 }, btn: { cx: 835, y: 528, track: 1.5 } },
+    en: { info: { x: 526, y: 191, pitch: 32 }, party: { x: 609, y: 351, pitch: 41 }, btn: { cx: 835, y: 530 } } }
 };
 const DP_LABELS = { tab1: 'Diplomacy', tab2: 'Intel Ledger', side: 'COLD WAR INTERFACE' };
 function dpGroups(kind) {
@@ -842,7 +843,9 @@ function dpGroups(kind) {
 }
 async function drawPanel(kind, key, s, lang) {
   const P = DP[kind], zh = lang === 'zh', G = P[zh ? 'zh' : 'en'];
-  const [zy28, zy32, ox26, ox29, ox30] = await Promise.all(['zy_28', 'zy_32', 'ox_26', 'ox_29', 'ox_30'].map(loadFont));
+  // B keeps the project's sizes (28/32 and 26/30 px at 2x); A is one size smaller at the user's request (26/30 and 24/28)
+  const F = P.fonts || { zi: 'zy_28', zp: 'zy_32', ei: 'ox_26', ep: 'ox_30' };
+  const [zyI, zyP, oxI, oxP, zy28, ox29, ox30] = await Promise.all([F.zi, F.zp, F.ei, F.ep, 'zy_28', 'ox_29', 'ox_30'].map(loadFont));
   const edited = kind === 'b' && ['tab1', 'tab2', 'side'].some(k => String(s[k]).trim() !== DP_LABELS[k]);
   const [frame, base, glass, unk] = await Promise.all([A(edited ? P.clean : P.frame), P.base ? A(P.base) : null, P.glass ? A(P.glass) : null, A('leader_unknown.png')]);
   cv.width = P.W; cv.height = P.H; ctx.clearRect(0, 0, P.W, P.H);
@@ -876,8 +879,8 @@ async function drawPanel(kind, key, s, lang) {
     if (im) fitSlot(ctx, im, P[k][0], P[k][1], P[k][2], P[k][3], (+s.iconscale || 100) / 100);
   }
   // text
-  const cInfo = zh ? [zy28] : [ox26, zy28], cParty = zh ? [zy32] : [ox30, zy32];
-  const eI = zh ? 28 : 26, eP = zh ? 32 : 30, split = zh ? 0.55 : 0.61, dark = zh ? 0.3 : 0.28;
+  const cInfo = zh ? [zyI] : [oxI, zyI], cParty = zh ? [zyP] : [oxP, zyP];
+  const eI = cInfo[0].lh, eP = cParty[0].lh, split = zh ? 0.55 : 0.61, dark = zh ? 0.3 : 0.28;
   fxText(ctx, s.info, cInfo, { x: G.info.x, y: G.info.y, em: eI, pitch: G.info.pitch, track: G.info.track, split, dark, align: 'left', glow: 0.2, maxLines: 3 });
   fxText(ctx, s.party, cParty, { x: G.party.x, y: G.party.y, em: eP, pitch: G.party.pitch, track: G.party.track, split, dark, align: 'left', glow: 0.2, maxLines: 3 });
   fxText(ctx, s.button, cParty, { cx: G.btn.cx, y: G.btn.y, em: eP, pitch: 44, track: G.btn.track, split, dark, align: 'center', glow: 0.2, maxLines: 1 });
