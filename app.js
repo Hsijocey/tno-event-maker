@@ -16,7 +16,7 @@ function loadImg(src) {
   });
   return imgCache[src];
 }
-const ASSET_VER = '7';   // bump when a texture in assets/ is regenerated
+const ASSET_VER = '8';   // bump when a texture in assets/ is regenerated
 const A = n => loadImg('assets/' + n + '?v=' + ASSET_VER);
 
 /* ---------- bitmap fonts ---------- */
@@ -155,6 +155,15 @@ function drawLayout(c, L, x, y, maxW, fmt) {
 /* instantTextBox helper */
 function textBox(c, text, chain, slot, o) {
   const st = styleOf(slot);
+  if (o.fit) {   // single line, never wraps: if it is wider than the box, squeeze it horizontally to fit
+    const L1 = layout(String(text == null ? '' : text).replace(/\n/g, ' '), chain, 1e6, st, o.color);
+    L1.lines.length = 1; L1.height = L1.lh;
+    const tw = L1.width, sx = tw > o.w ? o.w / tw : 1;
+    let y = o.y; if (o.vcenter && o.h) y += Math.floor((o.h - L1.height) / 2);
+    let x = o.x; if (sx === 1) { if (o.fmt === 'center') x += Math.floor((o.w - tw) / 2); else if (o.fmt === 'right') x += Math.floor(o.w - tw); }
+    c.save(); c.translate(x, 0); c.scale(sx, 1); drawLayout(c, L1, 0, y, Math.ceil(tw), 'left'); c.restore();
+    return L1;
+  }
   const L = layout(text, chain, o.w, st, o.color);
   let y = o.y;
   if (o.vcenter && o.h) y += Math.floor((o.h - L.height) / 2);
@@ -910,6 +919,83 @@ T.dpb = { name: '外交面板·新 UI', en: 'Diplomacy Panel (New UI)', scale: 2
 T.dpa = { name: '外交面板·冷战风', en: 'Diplomacy Panel (Cold War)', scale: 2, groups: dpGroups('a'), draw(s, lang) { return drawPanel('a', 'dpa', s, lang); } };
 T.nu.scale = 2;
 
+/* === TNO diplomacy view, upper block (interface/countrydiplomacyview.gui "country_info" + TNO_SG_Diplomacy.gui ideology line).
+       Coordinates are the game's, relative to country_info; text in the game's own fonts (CN mod chains in Chinese).
+       Icons (ideology / faction status / focus) are left empty on purpose: the user pastes those in by hand. === */
+T.dv = {
+  name: '外交界面', en: 'Diplomacy View',
+  groups: [
+    { title: '国家 Country', fields: [
+      { k: 'country', type: 'text', label: '国名 Country', zh: '全俄罗斯军政府', en: 'All-Russian Military Government' },
+      { k: 'faction', type: 'text', label: '阵营 Faction', zh: '没有阵营', en: 'No faction' },
+      { k: 'leader', type: 'text', label: '领袖 Leader', zh: '亚历山大·索洛维约夫', en: 'Aleksandr Solovyov' }
+    ] },
+    { title: '政党 Party', fields: [
+      { k: 'party', type: 'text', label: '执政党 Ruling party', zh: '全俄军官联盟 - 军官系', en: 'All-Russian Officers\' Union - Officers' },
+      { k: 'ideology', type: 'text', label: '意识形态 Ideology', zh: '贵族保守主义', en: 'Aristocratic Conservatism' },
+      { k: 'elections', type: 'text', label: '选举 Elections', zh: '无选举', en: 'No Elections' },
+      { k: 'pie', type: 'textarea', rows: 4, label: '饼图：每行「百分比 颜色」（从 3 点钟方向顺时针）', zh: '12 #1c1f7a\n33 #6a6a6a\n55 #474747', en: '12 #1c1f7a\n33 #6a6a6a\n55 #474747' }
+    ] },
+    { title: '国策 Focus', fields: [
+      { k: 'goal', type: 'text', label: '当前国策 Active focus', zh: '帝国近卫军的遗产', en: 'Legacy of the Imperial Guard' },
+      { k: 'progress', type: 'range', label: '进度 Progress', min: 0, max: 1, step: 0.01, def: 0.45 }
+    ] },
+    { title: '图片 Pictures', fields: [
+      ...picFields('portrait', '领袖头像 Portrait (156×210)'),
+      { k: 'flag', type: 'image', label: '国旗 Flag (82×52)' },
+      { k: 'samples', type: 'check', label: '没上传头像时显示剪影', def: true }
+    ] },
+    { title: '界面文字 Labels', fields: [
+      { k: 'tab1', type: 'text', label: '左标签', zh: '外交', en: 'Diplomacy' },
+      { k: 'tab2', type: 'text', label: '右标签', zh: '详细', en: 'Details' }
+    ] }
+  ],
+  async draw(s, lang) {
+    const [b16, a20, a24] = await Promise.all(['Bomb_16', 'aldrich_20_outline', 'aldrich_24_outline'].map(n => loadChain(n, lang)));
+    const [win, upper, lframe, tab, spirits, pov, gbtn, gfr, gfill, fov, unk] = await Promise.all(['dv_window.png', 'dv_upper_bg.png', 'dv_leader_frame.png', 'dv_tab.png',
+      lang === 'zh' ? 'dv_spirits_zh.png' : 'dv_spirits_en.png', 'dv_pie_overlay.png', 'dv_goal_button.png', 'pol_goal_progress_frame.png', 'pol_goal_progress.png', 'dv_flag_overlay.png', 'leader_unknown.png'].map(A));
+    const OY = 16;   // canvas y of country_info's origin (the tabs sit 8px above it)
+    cv.width = 550; cv.height = OY + 384; ctx.clearRect(0, 0, cv.width, cv.height);
+    cornered(ctx, win, 0, 0, 549, cv.height, 64, 64, true);
+    ctx.save(); ctx.translate(0, OY);
+    ctx.drawImage(upper, 139, 28);
+    // flag (GFX_shield_medium 82x52 at 39,39) + TNO CRT overlay
+    const fl = userImg['dv.flag'];
+    if (fl) { ctx.save(); ctx.beginPath(); ctx.rect(39, 39, 82, 52); ctx.clip(); drawCover(ctx, fl, 39, 39, 82, 52, null); ctx.restore(); }
+    ctx.drawImage(fov, 39, 34);
+    textBox(ctx, s.country, b16, 'Bomb_16', { fit: true, x: 230, y: 40, w: 290, maxLines: 1 });
+    textBox(ctx, s.faction, b16, 'Bomb_16', { fit: true, x: 230, y: 58, w: 290, maxLines: 1 });
+    textBox(ctx, s.leader, b16, 'Bomb_16', { fit: true, x: 230, y: 75, w: 290, maxLines: 1 });
+    [[111, s.tab1], [309, s.tab2]].forEach(([x, t]) => {
+      ctx.drawImage(tab, 0, 0, 258, 42, x, -8, 258, 42);
+      textBox(ctx, t, b16, 'Bomb_16', { x, y: -8, w: 258, h: 42, fmt: 'center', vcenter: true, maxLines: 1 });
+    });
+    ctx.drawImage(spirits, 16, 263);
+    // diplomacy_tab_top (0,33): portrait, leader frame, pie, ruling party, active focus
+    const por = userImg['dv.portrait'] || (s.samples ? unk : null);
+    if (por) {
+      const pc = userImg['dv.portrait'] ? fxCanvas(por, 156, 210, pp(s, 'portrait'), 'raw', 0) : por;
+      ctx.imageSmoothingQuality = 'high'; ctx.drawImage(pc, 22, 105, 156 * 0.74, 210 * 0.74);
+    }
+    ctx.drawImage(lframe, 13, 24);
+    const pie = parsePie(s.pie), tot = pie.reduce((a, p) => a + p.v, 0);
+    if (tot > 0) {
+      let a0 = 0;   // the game starts its pie at 3 o'clock and goes clockwise (matched against an in-game screenshot)
+      for (const p of pie) { const a1 = a0 + p.v / tot * Math.PI * 2; ctx.beginPath(); ctx.moveTo(192, 146); ctx.arc(192, 146, 30, a0, a1); ctx.closePath(); ctx.fillStyle = p.c; ctx.fill(); a0 = a1; }
+    }
+    ctx.drawImage(pov, 157, 111);
+    textBox(ctx, s.party, a20, 'aldrich_20_outline', { x: 251, y: 120, w: 273, fit: true });
+    textBox(ctx, s.ideology, a20, 'aldrich_20_outline', { x: 251, y: 144, w: 273, fit: true });
+    textBox(ctx, s.elections, a20, 'aldrich_20_outline', { x: 251, y: 167, w: 273, fit: true });
+    ctx.drawImage(gbtn, 0, 0, 285, 64, 244, 192, 285, 64);
+    textBox(ctx, s.goal, a24, 'aldrich_24_outline', { x: 250, y: 208, w: 272, h: 20, fmt: 'center', vcenter: true, fit: true });
+    const pw = Math.round(237 * Math.max(0, Math.min(1, +s.progress)));
+    if (pw > 0) ctx.drawImage(gfill, 0, 6, pw, 6, 270, 242, pw, 6);
+    ctx.drawImage(gfr, 268, 241);
+    ctx.restore();
+  }
+};
+
 /* === Cold-war news / event window: the user's frame (hoi4-panel-ui build_news, 581 wide, three heights, drawn at 2x)
        laid out like Red Dusk's EventWindow (also 581 wide): centred title at the top of the bay, description below it,
        picture bottom-left, one option on the bar. Chinese = 方正综艺; English = Red Dusk's event fonts
@@ -960,7 +1046,7 @@ T.sfx = {
   groups: [{ title: '免费音效素材 Free sounds', fields: [{ k: 'lib', type: 'sfxlib' }] }],
   draw(s, lang) { return T.se.draw(getState('se', lang), lang); }
 };
-const ORDER = ['se', 'nu', 'dpb', 'dpa', 'cwn', 'sfx', 'news', 'report', 'pol', 'cs', 'ci'];
+const ORDER = ['se', 'nu', 'dpb', 'dpa', 'cwn', 'sfx', 'news', 'report', 'pol', 'dv', 'cs', 'ci'];
 let cur = 'se', lang = 'zh';
 let store = {};
 try { store = JSON.parse(localStorage.getItem('tno-maker-v1') || '{}') || {}; } catch (e) { store = {}; }
