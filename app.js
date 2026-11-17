@@ -19,7 +19,7 @@ function loadImg(src) {
 const A = n => loadImg('assets/' + n);
 
 /* ---------- bitmap fonts ---------- */
-const fontCache = {}, FONT_VER = '3';   // bump when an atlas is rebuilt so browsers do not keep the old one
+const fontCache = {}, FONT_VER = '4';   // bump when an atlas is rebuilt so browsers do not keep the old one
 function loadFont(name) {
   if (!fontCache[name]) fontCache[name] = new Promise((res, rej) => {
     const s = document.createElement('script');
@@ -119,7 +119,7 @@ function drawLayout(c, L, x, y, maxW, fmt) {
     for (const g of ln.glyphs) {
       const key = g.color.join(',');
       if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push([g, pad + off + g.x, pad + i * L.lh]);
+      groups.get(key).push([g, pad + off + g.x, pad + Math.round(i * L.lh)]);
     }
   });
   for (const [key, list] of groups) {
@@ -727,13 +727,159 @@ T.nu = {
   }
 };
 
+/* === Diplomacy panels from the user's two ibisPaint projects (凉的小模板93 = flat "new UI" with the layout,
+       无标题554 = blank cold-war small panel). Same text effect as T.nu: 方正综艺 (Chinese) / Oxanium Bold (English),
+       darkened lower half + black halo. Both are drawn at about 2x of the project size. === */
+const fxT = document.createElement('canvas'), fxTc = fxT.getContext('2d');
+const fxS = document.createElement('canvas'), fxSc = fxS.getContext('2d');
+/* o: {x|cx, y, em, pitch, split, track, align:'left'|'center', dark, soft, glow, maxLines, w (wrap width), rot+cy (90° cw, centred on cx,cy)} */
+function fxText(c, text, chain, o) {
+  const L = layout(text, chain, o.w || 4000, { def: [255, 255, 255], cols: COL_BOMB });
+  if (o.maxLines && L.lines.length > o.maxLines) L.lines.length = o.maxLines;
+  const tr = o.track || 0, em = o.em, n = L.lines.length;
+  L.lines.forEach(ln => {
+    let x = 0, end = 0;
+    ln.glyphs.forEach(g => { g.x = Math.round(x); x += g.adv + tr; if (g.code !== 32 && g.code !== 0x3000) end = g.x + g.adv; });
+    ln.tw = end;
+  });
+  L.lh = o.pitch; L.height = n * o.pitch;
+  const bw = Math.max(1, ...L.lines.map(l => l.tw)), pad = 8;
+  const W = bw + pad * 2, H = Math.ceil((n - 1) * o.pitch + em * 1.4) + pad * 2;
+  if (fxT.width < W || fxT.height < H) { fxT.width = Math.max(W, fxT.width); fxT.height = Math.max(H, fxT.height); }
+  fxTc.globalCompositeOperation = 'source-over';
+  fxTc.clearRect(0, 0, fxT.width, fxT.height);
+  drawLayout(fxTc, L, pad, pad, bw, o.align === 'left' ? 'left' : 'center');
+  fxTc.globalCompositeOperation = 'source-atop';
+  const dark = o.dark == null ? 0.3 : o.dark, soft = o.soft == null ? 2 : o.soft;
+  L.lines.forEach((ln, i) => {
+    const top = pad + Math.round(i * o.pitch), yb = top + o.split * em;
+    const next = i === n - 1 ? top + em * 1.4 : pad + Math.round((i + 1) * o.pitch);
+    const g = fxTc.createLinearGradient(0, yb - soft, 0, yb + soft);
+    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,' + dark + ')');
+    fxTc.fillStyle = g; fxTc.fillRect(0, yb - soft, W, next - (yb - soft));
+  });
+  fxTc.globalCompositeOperation = 'source-over';
+  const m = 26, SW = W + m * 2, SH = H + m * 2, k = em / 38, OFF = 6000;
+  if (fxS.width < SW || fxS.height < SH) { fxS.width = Math.max(SW, fxS.width); fxS.height = Math.max(SH, fxS.height); }
+  fxSc.clearRect(0, 0, fxS.width, fxS.height);
+  fxSc.save();
+  fxSc.shadowOffsetX = OFF; fxSc.shadowOffsetY = 0; fxSc.shadowColor = 'rgba(0,0,0,1)';
+  [[14, 4], [8, 3], [4, 2], [3, 1]].forEach(([b, dy]) => { fxSc.shadowBlur = b * k; fxSc.drawImage(fxT, 0, 0, W, H, m - OFF, m + Math.round(dy * k), W, H); });
+  if (o.glow) { fxSc.shadowColor = 'rgba(255,255,255,' + o.glow + ')'; fxSc.shadowBlur = 14 * k; fxSc.drawImage(fxT, 0, 0, W, H, m - OFF, m, W, H); }
+  fxSc.restore();
+  fxSc.drawImage(fxT, 0, 0, W, H, m, m, W, H);
+  const blockH = (n - 1) * o.pitch + em;
+  if (o.rot) {
+    c.save(); c.translate(Math.round(o.cx), Math.round(o.cy)); c.rotate(Math.PI / 2);
+    c.drawImage(fxS, 0, 0, SW, SH, Math.round(-bw / 2) - pad - m, Math.round(-blockH / 2) - pad - m, SW, SH);
+    c.restore();
+  } else {
+    const bx = o.align === 'left' ? Math.round(o.x) : Math.round(o.cx - bw / 2);
+    c.drawImage(fxS, 0, 0, SW, SH, bx - pad - m, Math.round(o.y) - pad - m, SW, SH);
+  }
+}
+function rrPath(c, x, y, w, h, r) {
+  c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath();
+}
+/* geometry: B measured in the project's final composite (x2), A from hoi4-panel-ui/build_intel.py (design px = 1.965x project px) */
+const DP = {
+  b: { W: 1264, H: 650, frame: 'dpB_frame.png', clean: 'dpB_frame_clean.png',
+    flag: [116, 130, 152, 92, 0], portrait: [70, 254, 240, 322, 0], pie: [424.6, 387.4, 51],
+    faction: [417, 229, 148, 116], emblem: [1066, 229, 118, 118], focus: [425, 539, 170, 128],
+    zh: { info: { x: 502, y: 182, pitch: 36, track: 1.33 }, party: { x: 568, y: 335, pitch: 44.4, track: 2 }, btn: { cx: 824, y: 512, track: 2 } },
+    en: { info: { x: 512, y: 183, pitch: 36 }, party: { x: 567, y: 336, pitch: 45 }, btn: { cx: 835, y: 513 } },
+    labels: { tab1: { cx: 536, y: 116 }, tab2: { cx: 943, y: 118 }, side: { cx: 1169, cy: 329 } } },
+  a: { W: 1320, H: 660, frame: 'dpA_frame.png', base: 'dpA_base.png', glass: 'dpA_glass.png',
+    flag: [110, 122, 180, 98, 12], portrait: [72, 256, 250, 342, 20], pie: [441.5, 394, 55],
+    faction: [439, 235.5, 140, 94], emblem: [1122, 235.5, 112, 94], focus: [441.5, 547, 148, 124],
+    zh: { info: { x: 524, y: 186, pitch: 34, track: 1 }, party: { x: 609, y: 351, pitch: 44, track: 1.5 }, btn: { cx: 835, y: 527, track: 1.5 } },
+    en: { info: { x: 526, y: 189, pitch: 34 }, party: { x: 609, y: 351, pitch: 44 }, btn: { cx: 835, y: 529 } } }
+};
+const DP_LABELS = { tab1: 'Diplomacy', tab2: 'Intel Ledger', side: 'COLD WAR INTERFACE' };
+function dpGroups(kind) {
+  const g = [
+    { title: '文字 Text', fields: [
+      { k: 'info', type: 'textarea', rows: 3, label: '上栏三行：国名 / 阵营 / 领袖', zh: '神圣俄罗斯帝国\n欧洲公约\n芭芭拉·冯·塔博里茨基', en: 'People’s Republic of China\nNo Faction\nSong Puxuan' },
+      { k: 'party', type: 'textarea', rows: 3, label: '下栏三行：执政党 / 意识形态 / 选举', zh: '王党\n威权发展主义\n事件选举', en: 'Chinese Communist Party\nAuthoritarian Developmentalism\nEvent Election' },
+      { k: 'button', type: 'text', label: '按钮文字（国策名）', zh: '往日之影', en: 'Courage Operation' }
+    ] },
+    { title: '图片 Pictures', fields: [
+      ...picFields('portrait', '领袖头像 Portrait'),
+      { k: 'flag', type: 'image', label: '国旗 Flag' },
+      { k: 'faction', type: 'image', label: '阵营图标（上栏左侧）' },
+      { k: 'emblem', type: 'image', label: '意识形态徽章（上栏右侧）' },
+      { k: 'focus', type: 'image', label: '国策图标（饼图下方小屏）' },
+      { k: 'samples', type: 'check', label: '没上传时显示示例头像和图标', def: true },
+      { k: 'pie', type: 'textarea', rows: 5, label: '饼图：每行「百分比 颜色」',
+        zh: '8 #303030\n14 #7a261f\n14 #1f2f78\n22 #2a2a2a\n20 #333333\n22 #3b3b3b', en: '8 #303030\n14 #7a261f\n14 #1f2f78\n22 #2a2a2a\n20 #333333\n22 #3b3b3b' }
+    ] }
+  ];
+  if (kind === 'b') g.splice(1, 0, { title: '界面标签 Labels（改了才重画，不改就用工程里的原样）', fields: [
+    { k: 'tab1', type: 'text', label: '左标签', zh: DP_LABELS.tab1, en: DP_LABELS.tab1 },
+    { k: 'tab2', type: 'text', label: '右标签', zh: DP_LABELS.tab2, en: DP_LABELS.tab2 },
+    { k: 'side', type: 'text', label: '右侧竖排标题', zh: DP_LABELS.side, en: DP_LABELS.side }
+  ] });
+  return g;
+}
+async function drawPanel(kind, key, s, lang) {
+  const P = DP[kind], zh = lang === 'zh', G = P[zh ? 'zh' : 'en'];
+  const [zy28, zy32, ox26, ox29, ox30] = await Promise.all(['zy_28', 'zy_32', 'ox_26', 'ox_29', 'ox_30'].map(loadFont));
+  const edited = kind === 'b' && ['tab1', 'tab2', 'side'].some(k => String(s[k]).trim() !== DP_LABELS[k]);
+  const [frame, base, glass, unk] = await Promise.all([A(edited ? P.clean : P.frame), P.base ? A(P.base) : null, P.glass ? A(P.glass) : null, A('leader_unknown.png')]);
+  cv.width = P.W; cv.height = P.H; ctx.clearRect(0, 0, P.W, P.H);
+  const img = k => userImg[key + '.' + k];
+  // screens behind the cut-outs
+  if (base) ctx.drawImage(base, 0, 0);
+  else {
+    ctx.fillStyle = '#0b0b0c';
+    ctx.fillRect(P.flag[0], P.flag[1], P.flag[2], P.flag[3]); ctx.fillRect(P.portrait[0], P.portrait[1], P.portrait[2], P.portrait[3]);
+    ctx.beginPath(); ctx.arc(P.pie[0], P.pie[1], P.pie[2], 0, Math.PI * 2); ctx.fill();
+  }
+  const inWindow = (R, fn) => { ctx.save(); rrPath(ctx, R[0], R[1], R[2], R[3], R[4]); ctx.clip(); fn(); ctx.restore(); };
+  if (img('flag')) inWindow(P.flag, () => drawCover(ctx, img('flag'), P.flag[0], P.flag[1], P.flag[2], P.flag[3], null));
+  const por = img('portrait') || (s.samples ? unk : null);
+  if (por) inWindow(P.portrait, () => drawCover(ctx, por, P.portrait[0], P.portrait[1], P.portrait[2], P.portrait[3], img('portrait') ? pp(s, 'portrait') : null));
+  const pie = parsePie(s.pie), tot = pie.reduce((a, p) => a + p.v, 0);
+  if (tot > 0) {
+    let a0 = -Math.PI / 2;
+    for (const p of pie) {
+      const a1 = a0 + p.v / tot * Math.PI * 2;
+      ctx.beginPath(); ctx.moveTo(P.pie[0], P.pie[1]); ctx.arc(P.pie[0], P.pie[1], P.pie[2], a0, a1); ctx.closePath(); ctx.fillStyle = p.c; ctx.fill();
+      a0 = a1;
+    }
+  }
+  if (glass) ctx.drawImage(glass, 0, 0);
+  ctx.drawImage(frame, 0, 0);
+  // icons on top of the dark screens
+  const samples = { faction: 'samples/dp_faction.png', emblem: 'samples/dp_emblem.png', focus: 'samples/dp_focus.png' };
+  for (const k of ['faction', 'emblem', 'focus']) {
+    const im = img(k) || (s.samples ? await A(samples[k]) : null);
+    if (im) fitIn(ctx, im, P[k][0] - P[k][2] / 2, P[k][1] - P[k][3] / 2, P[k][2], P[k][3], 8);
+  }
+  // text
+  const cInfo = zh ? [zy28] : [ox26, zy28], cParty = zh ? [zy32] : [ox30, zy32];
+  const eI = zh ? 28 : 26, eP = zh ? 32 : 30, split = zh ? 0.55 : 0.61, dark = zh ? 0.3 : 0.28;
+  fxText(ctx, s.info, cInfo, { x: G.info.x, y: G.info.y, em: eI, pitch: G.info.pitch, track: G.info.track, split, dark, align: 'left', glow: 0.2, maxLines: 3 });
+  fxText(ctx, s.party, cParty, { x: G.party.x, y: G.party.y, em: eP, pitch: G.party.pitch, track: G.party.track, split, dark, align: 'left', glow: 0.2, maxLines: 3 });
+  fxText(ctx, s.button, cParty, { cx: G.btn.cx, y: G.btn.y, em: eP, pitch: 44, track: G.btn.track, split, dark, align: 'center', glow: 0.2, maxLines: 1 });
+  if (edited) {
+    const Lb = P.labels, ch = [ox29, zy28];
+    fxText(ctx, s.tab1, ch, { cx: Lb.tab1.cx, y: Lb.tab1.y, em: 29, pitch: 40, split: 0.56, dark: 0.3, align: 'center', glow: 0.2, maxLines: 1 });
+    fxText(ctx, s.tab2, ch, { cx: Lb.tab2.cx, y: Lb.tab2.y, em: 29, pitch: 40, split: 0.56, dark: 0.3, align: 'center', glow: 0.2, maxLines: 1 });
+    fxText(ctx, s.side, [ox30, zy28], { cx: Lb.side.cx, cy: Lb.side.cy, em: 30, pitch: 40, split: 0.5, dark: 0.34, align: 'center', glow: 0.15, maxLines: 1, rot: true });
+  }
+}
+T.dpb = { name: '外交面板·新 UI', en: 'Diplomacy Panel (New UI)', scale: 2, groups: dpGroups('b'), draw(s, lang) { return drawPanel('b', 'dpb', s, lang); } };
+T.dpa = { name: '外交面板·冷战风', en: 'Diplomacy Panel (Cold War)', scale: 2, groups: dpGroups('a'), draw(s, lang) { return drawPanel('a', 'dpa', s, lang); } };
+T.nu.scale = 2;
+
 /* sound library tab: keeps showing the super event, lists the bundled sounds */
 T.sfx = {
   name: '音效素材库', en: 'Sound Library',
   groups: [{ title: '免费音效素材 Free sounds', fields: [{ k: 'lib', type: 'sfxlib' }] }],
   draw(s, lang) { return T.se.draw(getState('se', lang), lang); }
 };
-const ORDER = ['se', 'nu', 'sfx', 'news', 'report', 'pol', 'cs', 'ci'];
+const ORDER = ['se', 'nu', 'dpb', 'dpa', 'sfx', 'news', 'report', 'pol', 'cs', 'ci'];
 let cur = 'se', lang = 'zh';
 let store = {};
 try { store = JSON.parse(localStorage.getItem('tno-maker-v1') || '{}') || {}; } catch (e) { store = {}; }
@@ -771,7 +917,9 @@ async function doRender() {
     if (!$('#stage').classList.contains('zoom1')) { cv.style.width = 'auto'; cv.style.height = 'auto'; cv.style.maxWidth = '100%'; cv.style.maxHeight = '78vh'; cv.style.flex = 'none'; cv.style.aspectRatio = cv.width + ' / ' + cv.height; }
     cv.parentNode.style.alignItems = 'flex-start';
     if (seq !== renderSeq) return render();
-    statusEl.textContent = cv.width + ' × ' + cv.height + ' px · ' + (lg === 'zh' ? '汉化版字体' : 'English fonts');
+    const two = T[t].scale === 2;
+    statusEl.textContent = cv.width + ' × ' + cv.height + ' px' + (two ? '（2 倍清晰度，工程原尺寸约 ' + Math.round(cv.width / 2) + ' × ' + Math.round(cv.height / 2) + '）' : '') + ' · ' + (lg === 'zh' ? '中文字体' : 'English fonts');
+    $('#dl2').textContent = two ? '下载 1×（工程原尺寸）' : '下载 2×';
   } catch (e) {
     console.error(e);
     statusEl.className = 'status err'; statusEl.textContent = '出错了：' + e.message + '（请检查网络后刷新）';
@@ -1132,20 +1280,22 @@ $('#lang-en').addEventListener('click', () => setLang('en'));
 
 function exportCanvas(scale) {
   if (scale === 1) return cv;
-  const c = document.createElement('canvas'); c.width = cv.width * scale; c.height = cv.height * scale;
-  const x = c.getContext('2d'); x.imageSmoothingEnabled = false; x.drawImage(cv, 0, 0, c.width, c.height);
+  const c = document.createElement('canvas'); c.width = Math.round(cv.width * scale); c.height = Math.round(cv.height * scale);
+  const x = c.getContext('2d');
+  if (scale < 1) { x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high'; } else x.imageSmoothingEnabled = false;
+  x.drawImage(cv, 0, 0, c.width, c.height);
   return c;
 }
 function download(scale) {
   exportCanvas(scale).toBlob(b => {
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(b); a.download = 'tno_' + cur + '_' + lang + (scale > 1 ? '@' + scale + 'x' : '') + '.png';
+    a.href = URL.createObjectURL(b); a.download = 'tno_' + cur + '_' + lang + (scale > 1 ? '@' + scale + 'x' : scale < 1 ? '@1x' : '') + '.png';
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   }, 'image/png');
 }
 $('#dl').addEventListener('click', () => download(1));
-$('#dl2').addEventListener('click', () => download(2));
+$('#dl2').addEventListener('click', () => download(T[cur].scale === 2 ? 0.5 : 2));
 $('#show').addEventListener('click', () => { $('#outimg').src = cv.toDataURL('image/png'); $('#out').hidden = false; });
 $('#outclose').addEventListener('click', () => { $('#out').hidden = true; });
 $('#out').addEventListener('click', e => { if (e.target.id === 'out') $('#out').hidden = true; });
