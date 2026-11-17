@@ -680,8 +680,12 @@ function nuText(c, text, font, o) {
   const x = Math.round(o.cx - o.w / 2) - pad, y = o.y - pad, OFF = 4000;
   c.save();
   c.shadowOffsetX = OFF; c.shadowOffsetY = 0;
-  c.shadowColor = 'rgba(0,0,0,0.9)'; c.shadowBlur = 5; c.drawImage(nuT, 0, 0, W, H, x - OFF, y + 1, W, H);
-  c.shadowColor = 'rgba(0,0,0,0.9)'; c.shadowBlur = 5; c.drawImage(nuT, 0, 0, W, H, x - OFF, y + 1, W, H);
+  // black halo, weighted downwards (the "shadow under the letters" in the project file)
+  c.shadowColor = 'rgba(0,0,0,1)';
+  c.shadowBlur = 14; c.drawImage(nuT, 0, 0, W, H, x - OFF, y + 4, W, H);
+  c.shadowBlur = 8; c.drawImage(nuT, 0, 0, W, H, x - OFF, y + 3, W, H);
+  c.shadowBlur = 4; c.drawImage(nuT, 0, 0, W, H, x - OFF, y + 2, W, H);
+  c.shadowBlur = 3; c.drawImage(nuT, 0, 0, W, H, x - OFF, y + 1, W, H);
   c.shadowColor = 'rgba(255,255,255,' + o.glow + ')'; c.shadowBlur = 14; c.drawImage(nuT, 0, 0, W, H, x - OFF, y, W, H);
   c.restore();
   c.drawImage(nuT, 0, 0, W, H, x, y, W, H);
