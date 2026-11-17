@@ -16,7 +16,8 @@ function loadImg(src) {
   });
   return imgCache[src];
 }
-const A = n => loadImg('assets/' + n);
+const ASSET_VER = '2';   // bump when a texture in assets/ is regenerated
+const A = n => loadImg('assets/' + n + '?v=' + ASSET_VER);
 
 /* ---------- bitmap fonts ---------- */
 const fontCache = {}, FONT_VER = '4';   // bump when an atlas is rebuilt so browsers do not keep the old one
