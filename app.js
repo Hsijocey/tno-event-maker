@@ -16,11 +16,11 @@ function loadImg(src) {
   });
   return imgCache[src];
 }
-const ASSET_VER = '4';   // bump when a texture in assets/ is regenerated
+const ASSET_VER = '5';   // bump when a texture in assets/ is regenerated
 const A = n => loadImg('assets/' + n + '?v=' + ASSET_VER);
 
 /* ---------- bitmap fonts ---------- */
-const fontCache = {}, FONT_VER = '5';   // bump when an atlas is rebuilt so browsers do not keep the old one
+const fontCache = {}, FONT_VER = '6';   // bump when an atlas is rebuilt so browsers do not keep the old one
 function loadFont(name) {
   if (!fontCache[name]) fontCache[name] = new Promise((res, rej) => {
     const s = document.createElement('script');
@@ -735,6 +735,13 @@ const fxT = document.createElement('canvas'), fxTc = fxT.getContext('2d');
 const fxS = document.createElement('canvas'), fxSc = fxS.getContext('2d');
 /* o: {x|cx, y, em, pitch, split, track, align:'left'|'center', dark, soft, glow, maxLines, w (wrap width), rot+cy (90° cw, centred on cx,cy)} */
 function fxText(c, text, chain, o) {
+  // fs: draw a bitmap font larger/smaller than its native size (the text is laid out natively, then scaled once)
+  const fs = o.fontScale || 1;
+  if (fs !== 1) {
+    const nat = Object.assign({}, o, { fontScale: 1, w: (o.w || 4000) / fs, em: o.em / fs, pitch: Math.round(o.pitch / fs), track: (o.track || 0) / fs, glow: 0, _raw: true });
+    const r = fxText(null, text, chain, nat);
+    return fxFinish(c, r.canvas, r.W, r.H, r.bw, r.n, o, fs);
+  }
   const L = layout(text, chain, o.w || 4000, { def: [255, 255, 255], cols: COL_BOMB });
   if (o.maxLines && L.lines.length > o.maxLines) L.lines.length = o.maxLines;
   const tr = o.track || 0, em = o.em, n = L.lines.length;
@@ -760,6 +767,21 @@ function fxText(c, text, chain, o) {
     fxTc.fillStyle = g; fxTc.fillRect(0, yb - soft, W, next - (yb - soft));
   });
   fxTc.globalCompositeOperation = 'source-over';
+  if (o._raw) return { canvas: fxT, W, H, bw, n };
+  return fxFinish(c, fxT, W, H, bw, n, o, 1);
+}
+const fxU = document.createElement('canvas'), fxUc = fxU.getContext('2d');
+/* halo + glow + placement; src holds the finished white/grey text with an 8px pad (scaled by fs when fs != 1) */
+function fxFinish(c, src, W, H, bw, n, o, fs) {
+  const em = o.em, pad = Math.round(8 * fs);
+  if (fs !== 1) {
+    const W2 = Math.ceil(W * fs), H2 = Math.ceil(H * fs);
+    if (fxU.width < W2 || fxU.height < H2) { fxU.width = Math.max(W2, fxU.width); fxU.height = Math.max(H2, fxU.height); }
+    fxUc.clearRect(0, 0, fxU.width, fxU.height); fxUc.imageSmoothingEnabled = true; fxUc.imageSmoothingQuality = 'high';
+    fxUc.drawImage(src, 0, 0, W, H, 0, 0, W2, H2);
+    src = fxU; W = W2; H = H2; bw = Math.round(bw * fs);
+  }
+  const fxT = src;
   const m = 26, SW = W + m * 2, SH = H + m * 2, k = em / 38, OFF = 6000;
   if (fxS.width < SW || fxS.height < SH) { fxS.width = Math.max(SW, fxS.width); fxS.height = Math.max(SH, fxS.height); }
   fxSc.clearRect(0, 0, fxS.width, fxS.height);
@@ -895,13 +917,57 @@ T.dpb = { name: '外交面板·新 UI', en: 'Diplomacy Panel (New UI)', scale: 2
 T.dpa = { name: '外交面板·冷战风', en: 'Diplomacy Panel (Cold War)', scale: 2, groups: dpGroups('a'), draw(s, lang) { return drawPanel('a', 'dpa', s, lang); } };
 T.nu.scale = 2;
 
+/* === Cold-war news / event window: the user's frame (hoi4-panel-ui build_news, 581 wide, three heights, drawn at 2x)
+       laid out like Red Dusk's EventWindow (also 581 wide): centred title at the top of the bay, description below it,
+       picture bottom-left, one option on the bar. Chinese = 方正综艺; English = Red Dusk's event fonts
+       (title hoi_36header, body Ubuntu Bold = hoi_18mbs, option Ubuntu = hoi_20bs). Same text effect as the panels. === */
+T.cwn = {
+  name: '冷战风新闻', en: 'Cold War News', scale: 2,
+  groups: [
+    { title: '文字 Text', fields: [
+      { k: 'title', type: 'text', label: '标题 Title', zh: '柏林墙倒塌', en: 'The Wall Comes Down' },
+      { k: 'desc', type: 'textarea', rows: 9, label: '正文 Description',
+        zh: '今天凌晨，一封加急电报送抵外交部。电文不长，措辞却异常强硬：对方要求我们在四十八小时内给出明确答复，否则将自行采取行动。\n\n内阁已经连夜召开紧急会议，军方的将领们主张立即进入戒备，而外交官们则希望再争取一点时间。街头的报童还在叫卖昨天的旧闻，没有人知道明天的头版会写些什么。',
+        en: 'An urgent telegram reached the Foreign Ministry before dawn. It is short and unusually blunt: we are to give a clear answer within forty-eight hours, or the other side will act on its own.\n\nThe cabinet has been in emergency session all night. The generals want the armed forces on alert at once; the diplomats ask for a little more time. On the street the newsboys are still shouting yesterday’s headlines, and nobody knows what tomorrow’s front page will say.' },
+      { k: 'option', type: 'text', label: '选项 Option', zh: '历史的车轮滚滚向前。', en: 'History moves on.' }
+    ] },
+    { title: '窗口 Window', fields: [
+      { k: 'h', type: 'select', label: '高度 Height', def: '676', opts: [['676', '短 676'], ['781', '中 781'], ['1096', '长 1096']] }
+    ] },
+    { title: '图片 Picture', fields: [
+      ...picFields('pic', '左下图片 Picture (173×140)'),
+      { k: 'gray', type: 'check', label: '转为黑白 Greyscale', def: false }
+    ] }
+  ],
+  async draw(s, lang) {
+    const zh = lang === 'zh', H = +s.h || 676;
+    const [zt, zb, zo, et, eb, eo] = await Promise.all(['nu_title', 'zy_28', 'zy_30', 'hoi_36header', 'ub_28', 'um_30'].map(loadFont));
+    const frame = await A('nw_' + H + '.png');
+    cv.width = 1162; cv.height = H * 2; ctx.clearRect(0, 0, cv.width, cv.height);
+    // picture window (28, H-192)-(201, H-52) at 1x, under the cut-out
+    const px = 56, py = (H - 192) * 2, pw = 346, ph = 280;
+    ctx.fillStyle = '#0b0b0c'; ctx.fillRect(px, py, pw, ph);
+    const im = userImg['cwn.pic'];
+    if (im) ctx.drawImage(fxCanvas(im, pw, ph, pp(s, 'pic'), s.gray ? 'gray' : 'raw', 0), px, py);
+    ctx.drawImage(frame, 0, 0);
+    const common = { split: zh ? 0.55 : 0.6, dark: 0.3, glow: 0.2 };
+    // Red Dusk: Title at (14,115) width 551 centred; Description at (31,181) width 512; option centred on the bar
+    if (zh) fxText(ctx, s.title, [zt], Object.assign({ cx: 579, y: 245, em: 42, pitch: 56, align: 'center', maxLines: 1 }, common));
+    else fxText(ctx, s.title, [et, zt], Object.assign({ cx: 579, y: 243, em: 46, pitch: 56, align: 'center', maxLines: 1, fontScale: 46 / 36 }, common));
+    const barTop = (H - 205) * 2, top = 340, pitch = zh ? 40 : 38;
+    fxText(ctx, s.desc, zh ? [zb] : [eb, zb], Object.assign({ x: 62, y: top, w: 1030, em: 28, pitch, track: zh ? 1 : 0, align: 'left', maxLines: Math.max(1, Math.floor((barTop - 24 - top) / pitch)) }, common));
+    const oem = 30, ocy = (H - 184.5) * 2;
+    fxText(ctx, s.option, zh ? [zo] : [eo, zo], Object.assign({ cx: 772, y: Math.round(ocy - oem * (zh ? 0.54 : 0.56)), w: 560, em: oem, pitch: 40, track: zh ? 1 : 0, align: 'center', maxLines: 1 }, common));
+  }
+};
+
 /* sound library tab: keeps showing the super event, lists the bundled sounds */
 T.sfx = {
   name: '音效素材库', en: 'Sound Library',
   groups: [{ title: '免费音效素材 Free sounds', fields: [{ k: 'lib', type: 'sfxlib' }] }],
   draw(s, lang) { return T.se.draw(getState('se', lang), lang); }
 };
-const ORDER = ['se', 'nu', 'dpb', 'dpa', 'sfx', 'news', 'report', 'pol', 'cs', 'ci'];
+const ORDER = ['se', 'nu', 'dpb', 'dpa', 'cwn', 'sfx', 'news', 'report', 'pol', 'cs', 'ci'];
 let cur = 'se', lang = 'zh';
 let store = {};
 try { store = JSON.parse(localStorage.getItem('tno-maker-v1') || '{}') || {}; } catch (e) { store = {}; }
