@@ -645,7 +645,13 @@ T.ci = {
 };
 
 /* ---------- state + UI ---------- */
-const ORDER = ['se', 'news', 'report', 'pol', 'cs', 'ci'];
+/* sound library tab: keeps showing the super event, lists the bundled sounds */
+T.sfx = {
+  name: '音效素材库', en: 'Sound Library',
+  groups: [{ title: '免费音效素材 Free sounds', fields: [{ k: 'lib', type: 'sfxlib' }] }],
+  draw(s, lang) { return T.se.draw(getState('se', lang), lang); }
+};
+const ORDER = ['se', 'sfx', 'news', 'report', 'pol', 'cs', 'ci'];
 let cur = 'se', lang = 'zh';
 let store = {};
 try { store = JSON.parse(localStorage.getItem('tno-maker-v1') || '{}') || {}; } catch (e) { store = {}; }
@@ -659,7 +665,7 @@ function defVal(f, lg) { return isText(f) ? f[lg] : f.def; }
 function getState(t, lg) {
   const s = {}, saved = store[t] || {};
   for (const f of fieldsOf(t)) {
-    if (f.type === 'image' || f.type === 'images' || f.type === 'audio') continue;
+    if (f.type === 'image' || f.type === 'images' || f.type === 'audio' || f.type === 'sfxlib') continue;
     const key = isText(f) ? f.k + '@' + lg : f.k;
     s[f.k] = saved[key] !== undefined ? saved[key] : defVal(f, lg);
   }
@@ -749,6 +755,8 @@ function buildForm() {
         fs.appendChild(el('label', { className: 'f' }, [lab, el('div', { className: 'row' }, [inp, clr])]));
       } else if (f.type === 'audio') {
         fs.appendChild(buildAudioUI());
+      } else if (f.type === 'sfxlib') {
+        fs.appendChild(buildSfxUI());
       } else if (f.type === 'thumbs') {
         const box = el('div', { className: 'thumbs' });
         f.list().forEach(src => {
@@ -771,18 +779,114 @@ function buildForm() {
 const Au = { ctx: null, buf: null, name: '', start: 0, len: 30, fin: 0, fout: 2, node: null, peaks: null, rec: null };
 const SE_LEN = 30;   // TNO ships 89 super event tracks, 10.7–72 s, mean 30.8 s
 function auCtx() { if (!Au.ctx) Au.ctx = new (window.AudioContext || window.webkitAudioContext)(); return Au.ctx; }
+/* sound-library layers mixed on top of the music: {id, name, buf, at (s into the clip), vol} */
+const Layers = [];
+const sfxBuf = {};
+function loadSfx(id) {
+  if (!sfxBuf[id]) sfxBuf[id] = fetch('sfx/' + id + '.mp3').then(r => { if (!r.ok) throw new Error('素材下载失败'); return r.arrayBuffer(); })
+    .then(ab => new Promise((res, rej) => auCtx().decodeAudioData(ab, res, rej)));
+  return sfxBuf[id];
+}
 function auClip() {
-  const b = Au.buf, sr = b.sampleRate;
-  const s0 = Math.max(0, Math.floor(Au.start * sr)), n = Math.max(1, Math.min(b.length - s0, Math.floor(Au.len * sr)));
-  const out = auCtx().createBuffer(b.numberOfChannels, n, sr);
+  const b = Au.buf, sr = b ? b.sampleRate : auCtx().sampleRate;
+  const s0 = b ? Math.max(0, Math.floor(Au.start * sr)) : 0;
+  const n = Math.max(1, b ? Math.min(b.length - s0, Math.floor(Au.len * sr)) : Math.floor(Au.len * sr));
+  const out = auCtx().createBuffer(2, n, sr);
   const fi = Math.min(n, Math.floor(Au.fin * sr)), fo = Math.min(n, Math.floor(Au.fout * sr));
-  for (let ch = 0; ch < b.numberOfChannels; ch++) {
-    const src = b.getChannelData(ch).subarray(s0, s0 + n), dst = out.getChannelData(ch);
-    dst.set(src);
+  for (let ch = 0; ch < 2; ch++) {
+    const dst = out.getChannelData(ch);
+    if (b) dst.set(b.getChannelData(Math.min(ch, b.numberOfChannels - 1)).subarray(s0, s0 + n));
+    for (const L of Layers) {
+      const src = L.buf.getChannelData(Math.min(ch, L.buf.numberOfChannels - 1));
+      const o = Math.floor(L.at * sr), m = Math.min(src.length, n - o);
+      for (let i = Math.max(0, -o); i < m; i++) dst[o + i] += src[i] * L.vol;
+    }
     for (let i = 0; i < fi; i++) dst[i] *= i / fi;
     for (let i = 0; i < fo; i++) dst[n - 1 - i] *= i / fo;
+    for (let i = 0; i < n; i++) { const v = dst[i]; if (v > 1) dst[i] = 1; else if (v < -1) dst[i] = -1; }
   }
   return out;
+}
+let layerBoxes = [];
+function refreshLayers() {
+  layerBoxes = layerBoxes.filter(b => b.isConnected);
+  layerBoxes.forEach(box => {
+    box.textContent = '';
+    if (!Layers.length) { box.appendChild(el('p', { className: 'hint', text: '还没有加入素材。到「音效素材库」页签里点「加入配乐」。' })); return; }
+    Layers.forEach((L, i) => {
+      const at = el('input', { type: 'range', min: 0, max: Math.max(1, Au.len - 0.5), step: 0.1 }); at.value = L.at;
+      const vol = el('input', { type: 'range', min: 0, max: 1.5, step: 0.05 }); vol.value = L.vol;
+      const la = el('b', { text: '出现时间：第 ' + L.at.toFixed(1) + ' 秒' }), lv = el('b', { text: '音量：' + Math.round(L.vol * 100) + '%' });
+      at.addEventListener('input', () => { L.at = +at.value; la.textContent = '出现时间：第 ' + L.at.toFixed(1) + ' 秒'; });
+      vol.addEventListener('input', () => { L.vol = +vol.value; lv.textContent = '音量：' + Math.round(L.vol * 100) + '%'; });
+      const rm = el('button', { type: 'button', className: 'btn', text: '移除' });
+      rm.addEventListener('click', () => { Layers.splice(i, 1); refreshLayers(); });
+      const row = el('div', { className: 'layer' }, [
+        el('div', { className: 'row' }, [el('span', { className: 'chk', text: (i + 1) + '. ' + L.name + '（' + L.buf.duration.toFixed(1) + ' 秒）' }), el('span', { className: 'spacer' }), rm]),
+        el('div', { className: 'row' }, [el('label', { className: 'f' }, [el('span', {}, [la]), at]), el('label', { className: 'f' }, [el('span', {}, [lv]), vol])])
+      ]);
+      box.appendChild(row);
+    });
+  });
+}
+function layerList() { const box = el('div', { className: 'layers' }); layerBoxes.push(box); setTimeout(refreshLayers, 0); return box; }
+function mixButtons(info) {
+  const play = el('button', { type: 'button', className: 'btn primary', text: '试听合成效果' });
+  const stop = el('button', { type: 'button', className: 'btn', text: '停止' });
+  const wav = el('button', { type: 'button', className: 'btn', text: '导出配乐 WAV' });
+  play.addEventListener('click', () => {
+    if (!Au.buf && !Layers.length) { info.textContent = '请先上传音乐，或从素材库加入至少一个素材。'; return; }
+    auStop(); auCtx().resume();
+    const n = auCtx().createBufferSource(); n.buffer = auClip(); n.connect(auCtx().destination); n.start(); Au.node = n;
+  });
+  stop.addEventListener('click', auStop);
+  wav.addEventListener('click', () => {
+    if (!Au.buf && !Layers.length) { info.textContent = '请先上传音乐，或从素材库加入至少一个素材。'; return; }
+    saveBlob(wavBlob(auClip()), 'tno_se_' + (Au.name || 'mix') + '.wav');
+  });
+  return el('div', { className: 'row' }, [play, stop, wav]);
+}
+const SFX_CAT = { radio: '无线电 Radio', speech: '演讲 Speeches', war: '战争 War', crowd: '人群与环境 Crowd & ambience' };
+function buildSfxUI() {
+  const box = el('div', { className: 'f' });
+  const info = el('p', { className: 'hint', text: '点「试听」先听一下，点「加入配乐」就会叠到超事件配乐里（没上传音乐也可以只用素材）。加入后在下面调出现时间和音量。' });
+  box.appendChild(info);
+  let prev = null;
+  const list = window.TNO_SFX || [];
+  Object.keys(SFX_CAT).forEach(cat => {
+    const items = list.filter(x => x.cat === cat); if (!items.length) return;
+    box.appendChild(el('div', { className: 'cat', text: SFX_CAT[cat] }));
+    items.forEach(it => {
+      const name = lang === 'zh' ? it.zh : it.en;
+      const p = el('button', { type: 'button', className: 'btn', text: '试听' });
+      const a = el('button', { type: 'button', className: 'btn primary', text: '加入配乐' });
+      p.addEventListener('click', async () => {
+        if (prev) { try { prev.stop(); } catch (e) {} prev = null; if (p.textContent === '停止') { p.textContent = '试听'; return; } }
+        try {
+          auCtx().resume(); p.textContent = '…';
+          const buf = await loadSfx(it.id), n = auCtx().createBufferSource();
+          n.buffer = buf; n.connect(auCtx().destination); n.start(); prev = n; p.textContent = '停止';
+          n.onended = () => { p.textContent = '试听'; if (prev === n) prev = null; };
+        } catch (e) { p.textContent = '试听'; info.textContent = '这个素材加载失败，请检查网络后再试。'; }
+      });
+      a.addEventListener('click', async () => {
+        try {
+          a.disabled = true; const buf = await loadSfx(it.id);
+          Layers.push({ id: it.id, name, buf, at: 0, vol: 0.8 }); refreshLayers();
+          info.textContent = '已加入：' + name + '。现在配乐里共有 ' + Layers.length + ' 个素材。';
+        } catch (e) { info.textContent = '这个素材加载失败，请检查网络后再试。'; }
+        a.disabled = false;
+      });
+      box.appendChild(el('div', { className: 'sfx' }, [
+        el('div', { className: 'sfxn' }, [el('b', { text: name }), el('span', { text: it.dur + ' 秒 · ' + (it.lic === 'own' ? '本站合成' : it.lic === 'CC0' ? 'CC0' : '公有领域') })]),
+        p, a]));
+    });
+  });
+  box.appendChild(el('div', { className: 'cat', text: '已加入的素材 Layers' }));
+  box.appendChild(layerList());
+  box.appendChild(mixButtons(info));
+  box.appendChild(el('p', { className: 'hint', text: '配乐的长度、起点、淡入淡出以及导出视频在「超事件」页签的「配乐」一栏。素材来自维基共享资源的公有领域 / CC0 录音，出处见 sfx/CREDITS.md。' }));
+  return box;
 }
 function wavBlob(buf) {
   const ch = Math.min(2, buf.numberOfChannels), n = buf.length, sr = buf.sampleRate;
@@ -844,7 +948,7 @@ function buildAudioUI() {
     lStart.textContent = '起点 Start：' + fmtT(Au.start) + ' → ' + fmtT(Au.start + Au.len);
     lLen.textContent = '长度 Length：' + Au.len.toFixed(1) + ' 秒';
     lFin.textContent = '淡入 Fade in：' + Au.fin.toFixed(1) + ' 秒'; lFout.textContent = '淡出 Fade out：' + Au.fout.toFixed(1) + ' 秒';
-    drawWave();
+    drawWave(); refreshLayers();
   }
   file.addEventListener('change', async () => {
     const f = file.files[0]; if (!f) return;
@@ -879,7 +983,7 @@ function buildAudioUI() {
   len.addEventListener('input', () => { Au.len = +len.value; sync(); });
   fin.addEventListener('input', () => { Au.fin = +fin.value; sync(); });
   fout.addEventListener('input', () => { Au.fout = +fout.value; sync(); });
-  const need = () => { if (!Au.buf) { info.textContent = '请先上传一个音频或视频文件。'; return false; } return true; };
+  const need = () => { if (!Au.buf && !Layers.length) { info.textContent = '请先上传一个音频或视频文件，或到「音效素材库」加入素材。'; return false; } return true; };
   play.addEventListener('click', () => {
     if (!need()) return;
     auStop(); auCtx().resume();
@@ -915,6 +1019,7 @@ function buildAudioUI() {
   });
   [file, info, wave, el('label', { className: 'f' }, [el('span', {}, [lStart]), start]), el('label', { className: 'f' }, [el('span', {}, [lLen]), len]), preset,
     el('div', { className: 'row' }, [el('label', { className: 'f' }, [el('span', {}, [lFin]), fin]), el('label', { className: 'f' }, [el('span', {}, [lFout]), fout])]),
+    el('div', { className: 'cat', text: '叠加的音效素材 Layers' }), layerList(),
     el('div', { className: 'row' }, [play, stop, wav, vid]),
     el('p', { className: 'hint', text: '导出的 WAV 可直接当超事件配乐用；放进 mod 的 music 文件夹前用任意工具转成 OGG 即可。视频会把当前超事件画面配上这段音乐录成一个文件。' })
   ].forEach(n => box.appendChild(n));
