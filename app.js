@@ -16,7 +16,7 @@ function loadImg(src) {
   });
   return imgCache[src];
 }
-const ASSET_VER = '6';   // bump when a texture in assets/ is regenerated
+const ASSET_VER = '7';   // bump when a texture in assets/ is regenerated
 const A = n => loadImg('assets/' + n + '?v=' + ASSET_VER);
 
 /* ---------- bitmap fonts ---------- */
