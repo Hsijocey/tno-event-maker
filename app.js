@@ -808,7 +808,7 @@ const DP = {
     labels: { tab1: { cx: 536, y: 116 }, tab2: { cx: 943, y: 118 }, side: { cx: 1169, cy: 329 } } },
   a: { W: 1320, H: 660, frame: 'dpA_frame.png', base: 'dpA_base.png', glass: 'dpA_glass.png',
     flag: [110, 122, 180, 98, 12], portrait: [72, 256, 250, 342, 20], pie: [441.5, 394, 55],
-    faction: [445, 235.5, 155, 123], emblem: [1122, 235.5, 118, 120], focus: [441.5, 547, 179, 133],   // same icon sizes as B (x1.965), not shrunk to the screen
+    faction: [447, 235.5, 127, 101], emblem: [1117, 235.5, 92, 94], focus: [441.5, 547, 159, 118],   // icons fill their screens the way they do in B (about 95% of the screen height), never over the bezel
     zh: { info: { x: 524, y: 186, pitch: 34, track: 1 }, party: { x: 609, y: 351, pitch: 44, track: 1.5 }, btn: { cx: 835, y: 527, track: 1.5 } },
     en: { info: { x: 526, y: 189, pitch: 34 }, party: { x: 609, y: 351, pitch: 44 }, btn: { cx: 835, y: 529 } } }
 };
