@@ -16,7 +16,7 @@ function loadImg(src) {
   });
   return imgCache[src];
 }
-const ASSET_VER = '8';   // bump when a texture in assets/ is regenerated
+const ASSET_VER = '9';   // bump when a texture in assets/ is regenerated
 const A = n => loadImg('assets/' + n + '?v=' + ASSET_VER);
 
 /* ---------- bitmap fonts ---------- */
@@ -700,6 +700,25 @@ function nuText(c, text, font, o) {
   c.restore();
   c.drawImage(nuT, 0, 0, W, H, x, y, W, H);
 }
+async function drawNuTo(outCv, outCtx, s, lang, useCwLabels) {
+  const [ft, fb] = await Promise.all(['nu_title', 'nu_button'].map(loadFont)), fq = fb;
+  const [base, glass, frame] = await Promise.all(['nu_base.png', 'nu_glass.png', useCwLabels ? 'nu_frame_cw.png' : 'nu_frame.png'].map(A));
+  outCv.width = 1204; outCv.height = 908; outCtx.clearRect(0, 0, outCv.width, outCv.height);
+  outCtx.drawImage(base, 0, 0);
+  const im = userImg['nu.pic'] || await loadImg(s.preset);
+  outCtx.save();
+  outCtx.beginPath();
+  const x = 42, y = 140, w = 1116, h = 652, r = 24;
+  outCtx.moveTo(x + r, y); outCtx.arcTo(x + w, y, x + w, y + h, r); outCtx.arcTo(x + w, y + h, x, y + h, r); outCtx.arcTo(x, y + h, x, y, r); outCtx.arcTo(x, y, x + w, y, r); outCtx.closePath(); outCtx.clip();
+  outCtx.drawImage(nuPicture(im, w, h, userImg['nu.pic'] ? pp(s, 'pic') : null, s.filter), x, y);
+  outCtx.restore();
+  outCtx.drawImage(glass, 0, 0);
+  outCtx.drawImage(frame, 0, 0);
+  // 方正综艺简体 (FZZYJW--GB1-0), sizes fitted to the .ipv composite: 1x title 21px, quote and button 17px, no tracking
+  nuText(outCtx, s.title, ft, { cx: 600, y: 46, w: 1000, em: 42, pitch: 60, split: 0.624, glow: 0.3, maxLines: 1 });
+  nuText(outCtx, s.quote, fq, { cx: 587, y: 583, w: 1040, em: 34, pitch: 50, split: 0.53, glow: 0.25, maxLines: 4 });
+  nuText(outCtx, s.option, fb, { cx: 586, y: 816, w: 440, em: 34, pitch: 48, split: 0.585, glow: 0.25, maxLines: 1 });
+}
 T.nu = {
   name: '新 UI 超事件', en: 'New UI Super Event',
   groups: [
@@ -716,25 +735,7 @@ T.nu = {
     ] },
     { title: '配乐 Music', fields: [{ k: 'music', type: 'audio' }] }
   ],
-  async draw(s, lang) {
-    const [ft, fb] = await Promise.all(['nu_title', 'nu_button'].map(loadFont)), fq = fb;
-    const [base, glass, frame] = await Promise.all(['nu_base.png', 'nu_glass.png', 'nu_frame.png'].map(A));
-    cv.width = 1204; cv.height = 908; ctx.clearRect(0, 0, cv.width, cv.height);
-    ctx.drawImage(base, 0, 0);
-    const im = userImg['nu.pic'] || await loadImg(s.preset);
-    ctx.save();
-    ctx.beginPath();
-    const x = 42, y = 140, w = 1116, h = 652, r = 24;
-    ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); ctx.clip();
-    ctx.drawImage(nuPicture(im, w, h, userImg['nu.pic'] ? pp(s, 'pic') : null, s.filter), x, y);
-    ctx.restore();
-    ctx.drawImage(glass, 0, 0);
-    ctx.drawImage(frame, 0, 0);
-    // 方正综艺简体 (FZZYJW--GB1-0), sizes fitted to the .ipv composite: 1x title 21px, quote and button 17px, no tracking
-    nuText(ctx, s.title, ft, { cx: 600, y: 46, w: 1000, em: 42, pitch: 60, split: 0.624, glow: 0.3, maxLines: 1 });
-    nuText(ctx, s.quote, fq, { cx: 587, y: 583, w: 1040, em: 34, pitch: 50, split: 0.53, glow: 0.25, maxLines: 4 });
-    nuText(ctx, s.option, fb, { cx: 586, y: 816, w: 440, em: 34, pitch: 48, split: 0.585, glow: 0.25, maxLines: 1 });
-  }
+  draw(s, lang) { return drawNuTo(cv, ctx, s, lang, false); }
 };
 
 /* === Diplomacy panels from the user's two ibisPaint projects (凉的小模板93 = flat "new UI" with the layout,
@@ -870,51 +871,52 @@ function dpGroups(kind) {
   ] });
   return g;
 }
-async function drawPanel(kind, key, s, lang) {
+async function drawPanelTo(outCv, outCtx, kind, key, s, lang) {
   const P = DP[kind], zh = lang === 'zh', G = P[zh ? 'zh' : 'en'];
   // B keeps the project's sizes (28/32 and 26/30 px at 2x); A is one size smaller at the user's request (26/30 and 24/28)
   const F = P.fonts || { zi: 'zy_28', zp: 'zy_32', ei: 'ox_26', ep: 'ox_30' };
   const [zyI, zyP, oxI, oxP, zy28, ox29, ox30] = await Promise.all([F.zi, F.zp, F.ei, F.ep, 'zy_28', 'ox_29', 'ox_30'].map(loadFont));
   const edited = kind === 'b' && ['tab1', 'tab2', 'side'].some(k => String(s[k]).trim() !== DP_LABELS[k]);
   const [frame, base, glass, unk] = await Promise.all([A(edited ? P.clean : P.frame), P.base ? A(P.base) : null, P.glass ? A(P.glass) : null, A('leader_unknown.png')]);
-  cv.width = P.W; cv.height = P.H; ctx.clearRect(0, 0, P.W, P.H);
+  outCv.width = P.W; outCv.height = P.H; outCtx.clearRect(0, 0, P.W, P.H);
   const img = k => userImg[key + '.' + k];
   // screens behind the cut-outs
-  if (base) ctx.drawImage(base, 0, 0);
+  if (base) outCtx.drawImage(base, 0, 0);
   else {
-    ctx.fillStyle = '#0b0b0c';
-    ctx.fillRect(P.flag[0], P.flag[1], P.flag[2], P.flag[3]); ctx.fillRect(P.portrait[0], P.portrait[1], P.portrait[2], P.portrait[3]);
-    ctx.beginPath(); ctx.arc(P.pie[0], P.pie[1], P.pie[2], 0, Math.PI * 2); ctx.fill();
+    outCtx.fillStyle = '#0b0b0c';
+    outCtx.fillRect(P.flag[0], P.flag[1], P.flag[2], P.flag[3]); outCtx.fillRect(P.portrait[0], P.portrait[1], P.portrait[2], P.portrait[3]);
+    outCtx.beginPath(); outCtx.arc(P.pie[0], P.pie[1], P.pie[2], 0, Math.PI * 2); outCtx.fill();
   }
-  const inWindow = (R, fn) => { ctx.save(); rrPath(ctx, R[0], R[1], R[2], R[3], R[4]); ctx.clip(); fn(); ctx.restore(); };
-  if (img('flag')) inWindow(P.flag, () => drawCover(ctx, img('flag'), P.flag[0], P.flag[1], P.flag[2], P.flag[3], null));
+  const inWindow = (R, fn) => { outCtx.save(); rrPath(outCtx, R[0], R[1], R[2], R[3], R[4]); outCtx.clip(); fn(); outCtx.restore(); };
+  if (img('flag')) inWindow(P.flag, () => drawCover(outCtx, img('flag'), P.flag[0], P.flag[1], P.flag[2], P.flag[3], null));
   const por = img('portrait') || (s.samples ? unk : null);
-  if (por) inWindow(P.portrait, () => drawCover(ctx, por, P.portrait[0], P.portrait[1], P.portrait[2], P.portrait[3], img('portrait') ? pp(s, 'portrait') : null));
+  if (por) inWindow(P.portrait, () => drawCover(outCtx, por, P.portrait[0], P.portrait[1], P.portrait[2], P.portrait[3], img('portrait') ? pp(s, 'portrait') : null));
   const pie = parsePie(s.pie), tot = pie.reduce((a, p) => a + p.v, 0);
   if (tot > 0) {
     let a0 = -Math.PI / 2;
     for (const p of pie) {
       const a1 = a0 + p.v / tot * Math.PI * 2;
-      ctx.beginPath(); ctx.moveTo(P.pie[0], P.pie[1]); ctx.arc(P.pie[0], P.pie[1], P.pie[2], a0, a1); ctx.closePath(); ctx.fillStyle = p.c; ctx.fill();
+      outCtx.beginPath(); outCtx.moveTo(P.pie[0], P.pie[1]); outCtx.arc(P.pie[0], P.pie[1], P.pie[2], a0, a1); outCtx.closePath(); outCtx.fillStyle = p.c; outCtx.fill();
       a0 = a1;
     }
   }
-  if (glass) ctx.drawImage(glass, 0, 0);
-  ctx.drawImage(frame, 0, 0);
+  if (glass) outCtx.drawImage(glass, 0, 0);
+  outCtx.drawImage(frame, 0, 0);
   // icon screens (faction / ideology emblem / focus) stay empty: the user pastes icons in themselves (2026-11-17)
   // text
   const cInfo = zh ? [zyI] : [oxI, zyI], cParty = zh ? [zyP] : [oxP, zyP];
   const eI = cInfo[0].lh, eP = cParty[0].lh, split = zh ? 0.55 : 0.61, dark = zh ? 0.3 : 0.28;
-  fxText(ctx, s.info, cInfo, { x: G.info.x, y: G.info.y, em: eI, pitch: G.info.pitch, track: G.info.track, split, dark, align: 'left', glow: 0.2, maxLines: 3 });
-  fxText(ctx, s.party, cParty, { x: G.party.x, y: G.party.y, em: eP, pitch: G.party.pitch, track: G.party.track, split, dark, align: 'left', glow: 0.2, maxLines: 3 });
-  fxText(ctx, s.button, cParty, { cx: G.btn.cx, y: G.btn.y, em: eP, pitch: 44, track: G.btn.track, split, dark, align: 'center', glow: 0.2, maxLines: 1 });
+  fxText(outCtx, s.info, cInfo, { x: G.info.x, y: G.info.y, em: eI, pitch: G.info.pitch, track: G.info.track, split, dark, align: 'left', glow: 0.2, maxLines: 3 });
+  fxText(outCtx, s.party, cParty, { x: G.party.x, y: G.party.y, em: eP, pitch: G.party.pitch, track: G.party.track, split, dark, align: 'left', glow: 0.2, maxLines: 3 });
+  fxText(outCtx, s.button, cParty, { cx: G.btn.cx, y: G.btn.y, em: eP, pitch: 44, track: G.btn.track, split, dark, align: 'center', glow: 0.2, maxLines: 1 });
   if (edited) {
     const Lb = P.labels, ch = [ox29, zy28];
-    fxText(ctx, s.tab1, ch, { cx: Lb.tab1.cx, y: Lb.tab1.y, em: 29, pitch: 40, split: 0.56, dark: 0.3, align: 'center', glow: 0.2, maxLines: 1 });
-    fxText(ctx, s.tab2, ch, { cx: Lb.tab2.cx, y: Lb.tab2.y, em: 29, pitch: 40, split: 0.56, dark: 0.3, align: 'center', glow: 0.2, maxLines: 1 });
-    fxText(ctx, s.side, [ox30, zy28], { cx: Lb.side.cx, cy: Lb.side.cy, em: 30, pitch: 40, split: 0.5, dark: 0.34, align: 'center', glow: 0.15, maxLines: 1, rot: true });
+    fxText(outCtx, s.tab1, ch, { cx: Lb.tab1.cx, y: Lb.tab1.y, em: 29, pitch: 40, split: 0.56, dark: 0.3, align: 'center', glow: 0.2, maxLines: 1 });
+    fxText(outCtx, s.tab2, ch, { cx: Lb.tab2.cx, y: Lb.tab2.y, em: 29, pitch: 40, split: 0.56, dark: 0.3, align: 'center', glow: 0.2, maxLines: 1 });
+    fxText(outCtx, s.side, [ox30, zy28], { cx: Lb.side.cx, cy: Lb.side.cy, em: 30, pitch: 40, split: 0.5, dark: 0.34, align: 'center', glow: 0.15, maxLines: 1, rot: true });
   }
 }
+function drawPanel(kind, key, s, lang) { return drawPanelTo(cv, ctx, kind, key, s, lang); }
 T.dpb = { name: '外交面板·新 UI', en: 'Diplomacy Panel (New UI)', scale: 2, groups: dpGroups('b'), draw(s, lang) { return drawPanel('b', 'dpb', s, lang); } };
 T.dpa = { name: '外交面板·冷战风', en: 'Diplomacy Panel (Cold War)', scale: 2, groups: dpGroups('a'), draw(s, lang) { return drawPanel('a', 'dpa', s, lang); } };
 T.nu.scale = 2;
@@ -1003,6 +1005,26 @@ T.dv = {
        laid out like Red Dusk's EventWindow (also 581 wide): centred title at the top of the bay, description below it,
        picture bottom-left, one option on the bar. Chinese = 方正综艺; English = Red Dusk's event fonts
        (title hoi_36header, body Ubuntu Bold = hoi_18mbs, option Ubuntu = hoi_20bs). Same text effect as the panels. === */
+async function drawCwnTo(outCv, outCtx, s, lang) {
+  const zh = lang === 'zh', H = +s.h || 676;
+  const [zt, zb, zo, et, eb, eo] = await Promise.all(['nu_title', 'zy_28', 'zy_30', 'hoi_36header', 'ub_28', 'um_30'].map(loadFont));
+  const frame = await A('nw_' + H + '.png');
+  outCv.width = 1162; outCv.height = H * 2; outCtx.clearRect(0, 0, outCv.width, outCv.height);
+  // picture window (28, H-192)-(201, H-52) at 1x, under the cut-out
+  const px = 56, py = (H - 192) * 2, pw = 346, ph = 280;
+  outCtx.fillStyle = '#0b0b0c'; outCtx.fillRect(px, py, pw, ph);
+  const im = userImg['cwn.pic'];
+  if (im) outCtx.drawImage(fxCanvas(im, pw, ph, pp(s, 'pic'), s.gray ? 'gray' : 'raw', 0), px, py);
+  outCtx.drawImage(frame, 0, 0);
+  const common = { split: zh ? 0.55 : 0.6, dark: 0.3, glow: 0.2 };
+  // Red Dusk: Title at (14,115) width 551 centred; Description at (31,181) width 512; option centred on the bar
+  if (zh) fxText(outCtx, s.title, [zt], Object.assign({ cx: 579, y: 245, em: 42, pitch: 56, align: 'center', maxLines: 1 }, common));
+  else fxText(outCtx, s.title, [et, zt], Object.assign({ cx: 579, y: 243, em: 46, pitch: 56, align: 'center', maxLines: 1, fontScale: 46 / 36, bold: 1 }, common));
+  const barTop = (H - 205) * 2, top = 340, pitch = zh ? 40 : 38;
+  fxText(outCtx, s.desc, zh ? [zb] : [eb, zb], Object.assign({ x: 62, y: top, w: 1030, em: 28, pitch, track: zh ? 1 : 0, align: 'left', maxLines: Math.max(1, Math.floor((barTop - 24 - top) / pitch)) }, common));
+  const oem = 30, ocy = (H - 184.5) * 2;
+  fxText(outCtx, s.option, zh ? [zo] : [eo, zo], Object.assign({ cx: 772, y: Math.round(ocy - oem * (zh ? 0.54 : 0.56)), w: 560, em: oem, pitch: 40, track: zh ? 1 : 0, align: 'center', maxLines: 1 }, common));
+}
 T.cwn = {
   name: '冷战风新闻', en: 'Cold War News', scale: 2,
   groups: [
@@ -1021,25 +1043,86 @@ T.cwn = {
       { k: 'gray', type: 'check', label: '转为黑白 Greyscale', def: false }
     ] }
   ],
+  draw(s, lang) { return drawCwnTo(cv, ctx, s, lang); }
+};
+
+/* === Cold-war full composite suite: Diplomacy panel (top-left) + scanline box (top-right) +
+       Cold-war news (bottom-left) + Cold-war super event (bottom-right) in one 2x sheet.
+       Reads live state & uploads from dpa / cwn / nu so edits stay synced across tabs. === */
+const cwDpa = document.createElement('canvas'), cwCwn = document.createElement('canvas'), cwNu = document.createElement('canvas');
+T.cwall = {
+  name: '冷战风整体', en: 'Cold War Suite', scale: 2,
+  groups: [
+    { title: '整体版式与背景 Layout & Background', fields: [
+      { k: 'bg', type: 'select', label: '底色 Background', def: 'black', opts: [['black', '纯黑（同参考图）'], ['trans', '透明（抠图，方便叠地图）']] },
+      ...picFields('bgpic', '自定义底图（可选，上传后覆盖背景）'),
+      { k: 'seLabels', type: 'check', label: '超事件底部显示 FILE 4791 / EYES ONLY', def: true },
+      { k: 'showBox', type: 'check', label: '显示右上扫描线框', def: true }
+    ] },
+    { title: '右上扫描线框 Top-right Box', collapsed: true, fields: [
+      { k: 'boxText', type: 'textarea', rows: 2, label: '框内文字（留空 = 纯扫描线框）', zh: '', en: '' },
+      ...picFields('boxpic', '框内图片（可选，覆盖在扫描线下）')
+    ] },
+    { sub: 'dpa', title: '外交面板·冷战风（与对应页签同步）' },
+    { sub: 'cwn', title: '冷战风新闻（与对应页签同步）' },
+    { sub: 'nu', title: '冷战风超事件（与对应页签同步）' },
+    { title: '配乐 Music（导出带配乐整图视频）', collapsed: true, fields: [{ k: 'music', type: 'audio' }] }
+  ],
   async draw(s, lang) {
-    const zh = lang === 'zh', H = +s.h || 676;
-    const [zt, zb, zo, et, eb, eo] = await Promise.all(['nu_title', 'zy_28', 'zy_30', 'hoi_36header', 'ub_28', 'um_30'].map(loadFont));
-    const frame = await A('nw_' + H + '.png');
-    cv.width = 1162; cv.height = H * 2; ctx.clearRect(0, 0, cv.width, cv.height);
-    // picture window (28, H-192)-(201, H-52) at 1x, under the cut-out
-    const px = 56, py = (H - 192) * 2, pw = 346, ph = 280;
-    ctx.fillStyle = '#0b0b0c'; ctx.fillRect(px, py, pw, ph);
-    const im = userImg['cwn.pic'];
-    if (im) ctx.drawImage(fxCanvas(im, pw, ph, pp(s, 'pic'), s.gray ? 'gray' : 'raw', 0), px, py);
-    ctx.drawImage(frame, 0, 0);
-    const common = { split: zh ? 0.55 : 0.6, dark: 0.3, glow: 0.2 };
-    // Red Dusk: Title at (14,115) width 551 centred; Description at (31,181) width 512; option centred on the bar
-    if (zh) fxText(ctx, s.title, [zt], Object.assign({ cx: 579, y: 245, em: 42, pitch: 56, align: 'center', maxLines: 1 }, common));
-    else fxText(ctx, s.title, [et, zt], Object.assign({ cx: 579, y: 243, em: 46, pitch: 56, align: 'center', maxLines: 1, fontScale: 46 / 36, bold: 1 }, common));
-    const barTop = (H - 205) * 2, top = 340, pitch = zh ? 40 : 38;
-    fxText(ctx, s.desc, zh ? [zb] : [eb, zb], Object.assign({ x: 62, y: top, w: 1030, em: 28, pitch, track: zh ? 1 : 0, align: 'left', maxLines: Math.max(1, Math.floor((barTop - 24 - top) / pitch)) }, common));
-    const oem = 30, ocy = (H - 184.5) * 2;
-    fxText(ctx, s.option, zh ? [zo] : [eo, zo], Object.assign({ cx: 772, y: Math.round(ocy - oem * (zh ? 0.54 : 0.56)), w: 560, em: oem, pitch: 40, track: zh ? 1 : 0, align: 'center', maxLines: 1 }, common));
+    const [dpaS, cwnS, nuS] = [getState('dpa', lang), getState('cwn', lang), getState('nu', lang)];
+    await drawPanelTo(cwDpa, cwDpa.getContext('2d'), 'a', 'dpa', dpaS, lang);
+    await drawCwnTo(cwCwn, cwCwn.getContext('2d'), cwnS, lang);
+    await drawNuTo(cwNu, cwNu.getContext('2d'), nuS, lang, !!s.seLabels);
+    const W = 2660, newsW = 1022, newsH = Math.round(cwCwn.height * newsW / cwCwn.width);
+    let H = Math.max(1924, 710 + newsH + 25); if (H & 1) H++;
+    cv.width = W; cv.height = H; ctx.clearRect(0, 0, W, H);
+    if (s.bg === 'black') { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H); }
+    const bgIm = userImg['cwall.bgpic'];
+    if (bgIm) drawCover(ctx, bgIm, 0, 0, W, H, pp(s, 'bgpic'));
+    // 1. Top-left: Cold-war Diplomacy panel (native 1320x660)
+    ctx.drawImage(cwDpa, 12, 12);
+    // 2. Top-right: CRT scanline box (542x206 at 1346,26 — matches reference 208x79 at 518,11 x 2.6)
+    if (s.showBox) {
+      const bx = 1346, by = 26, bw = 542, bh = 206;
+      ctx.save();
+      ctx.fillStyle = '#181818';
+      ctx.fillRect(bx, by, bw, bh);
+      const bIm = userImg['cwall.boxpic'];
+      if (bIm) {
+        ctx.save(); ctx.beginPath(); ctx.rect(bx + 2, by + 2, bw - 4, bh - 4); ctx.clip();
+        drawCover(ctx, bIm, bx + 2, by + 2, bw - 4, bh - 4, pp(s, 'boxpic'));
+        ctx.restore();
+      }
+      // horizontal CRT scanlines
+      for (let y = by + 2; y < by + bh - 2; y += 5) {
+        ctx.fillStyle = 'rgba(255,255,255,0.06)'; ctx.fillRect(bx + 2, y, bw - 4, 2);
+        ctx.fillStyle = 'rgba(0,0,0,0.28)'; ctx.fillRect(bx + 2, y + 2, bw - 4, 2);
+      }
+      // subtle inner vignette
+      const vg = ctx.createLinearGradient(bx, by, bx, by + bh);
+      vg.addColorStop(0, 'rgba(0,0,0,0.32)'); vg.addColorStop(0.14, 'rgba(0,0,0,0)');
+      vg.addColorStop(0.86, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.38)');
+      ctx.fillStyle = vg; ctx.fillRect(bx + 2, by + 2, bw - 4, bh - 4);
+      // optional text inside box
+      const bt = String(s.boxText || '').trim();
+      if (bt) {
+        const zh = lang === 'zh';
+        const [zy, ox] = await Promise.all(['zy_30', 'ox_28'].map(loadFont));
+        const chain = zh ? [zy] : [ox, zy], em = chain[0].lh, pitch = 40;
+        const lines = bt.split(/\r?\n/).length;
+        const th = (lines - 1) * pitch + em;
+        fxText(ctx, bt, chain, { cx: bx + bw / 2, y: by + Math.round((bh - th) / 2), w: bw - 36, em, pitch, track: zh ? 1.5 : 0, split: zh ? 0.55 : 0.61, dark: 0.3, align: 'center', glow: 0.2, maxLines: 4 });
+      }
+      // crisp light-grey outer border (matches ref's thin rectangular frame)
+      ctx.strokeStyle = '#8b8b8b'; ctx.lineWidth = 2;
+      ctx.strokeRect(bx + 1, by + 1, bw - 2, bh - 2);
+      ctx.restore();
+    }
+    // 3. Bottom-left: Cold-war News (scaled cleanly to 1022 wide, matching reference proportions)
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(cwCwn, 0, 0, cwCwn.width, cwCwn.height, 148, 710, newsW, newsH);
+    // 4. Bottom-right: Cold-war Super Event (native 1204x908)
+    ctx.drawImage(cwNu, 1404, 534);
   }
 };
 
@@ -1049,7 +1132,7 @@ T.sfx = {
   groups: [{ title: '免费音效素材 Free sounds', fields: [{ k: 'lib', type: 'sfxlib' }] }],
   draw(s, lang) { return T.se.draw(getState('se', lang), lang); }
 };
-const ORDER = ['se', 'nu', 'dpb', 'dpa', 'cwn', 'sfx', 'news', 'report', 'pol', 'dv', 'cs', 'ci'];
+const ORDER = ['se', 'nu', 'dpb', 'dpa', 'cwn', 'cwall', 'sfx', 'news', 'report', 'pol', 'dv', 'cs', 'ci'];
 let cur = 'se', lang = 'zh';
 let store = {};
 try { store = JSON.parse(localStorage.getItem('tno-maker-v1') || '{}') || {}; } catch (e) { store = {}; }
@@ -1057,7 +1140,7 @@ try { const m = JSON.parse(localStorage.getItem('tno-maker-ui') || '{}'); if (T[
 if (T[location.hash.slice(1)]) cur = location.hash.slice(1);
 const save = () => { try { localStorage.setItem('tno-maker-v1', JSON.stringify(store)); localStorage.setItem('tno-maker-ui', JSON.stringify({ cur, lang })); } catch (e) {} };
 
-const fieldsOf = t => T[t].groups.flatMap(g => g.fields);
+const fieldsOf = t => T[t].groups.flatMap(g => g.fields || []);
 const isText = f => f.zh !== undefined;
 function defVal(f, lg) { return isText(f) ? f[lg] : f.def; }
 function getState(t, lg) {
@@ -1109,74 +1192,98 @@ function readFile(file, key) {
   im.onerror = () => { statusEl.className = 'status err'; statusEl.textContent = '这个文件不是浏览器能打开的图片（DDS/TGA 请先转成 PNG）'; };
   im.src = url;
 }
+function addFields(fs, tab, s, fields) {
+  for (const f of fields) {
+    const id = 'f-' + cur + '-' + tab + '-' + f.k;
+    const lab = el('span', {}, [el('b', { text: f.label })]);
+    if (f.type === 'text' || f.type === 'textarea') {
+      const inp = f.type === 'text' ? el('input', { type: 'text', id, value: s[f.k] }) : el('textarea', { id, rows: f.rows || 4, value: s[f.k] });
+      inp.addEventListener('input', () => { setVal(tab, f, inp.value); render(); });
+      fs.appendChild(el('label', { className: 'f' }, [lab, inp]));
+    } else if (f.type === 'select') {
+      const sel = el('select', { id }, f.opts.map(o => el('option', { value: o[0], text: o[1] })));
+      sel.value = s[f.k];
+      sel.addEventListener('change', () => { setVal(tab, f, sel.value); render(); });
+      fs.appendChild(el('label', { className: 'f' }, [lab, sel]));
+    } else if (f.type === 'range') {
+      const inp = el('input', { type: 'range', id, min: f.min, max: f.max, step: f.step });
+      inp.value = s[f.k];
+      inp.addEventListener('input', () => { setVal(tab, f, +inp.value); render(); });
+      fs.appendChild(el('label', { className: 'f' }, [lab, inp]));
+    } else if (f.type === 'check') {
+      const inp = el('input', { type: 'checkbox', id, checked: !!s[f.k] });
+      inp.addEventListener('change', () => { setVal(tab, f, inp.checked); render(); });
+      fs.appendChild(el('label', { className: 'chk' }, [inp, el('span', { text: f.label })]));
+    } else if (f.type === 'image') {
+      const key = tab + '.' + f.k;
+      const inp = el('input', { type: 'file', id, accept: 'image/*' });
+      inp.addEventListener('change', () => readFile(inp.files[0], key));
+      const clr = el('button', { type: 'button', className: 'btn', text: '清除 Clear' });
+      clr.addEventListener('click', () => { userImg[key] = null; inp.value = ''; render(); });
+      fs.appendChild(el('label', { className: 'f' }, [lab, el('div', { className: 'row' }, [inp, clr])]));
+    } else if (f.type === 'images') {
+      const key = tab + '.' + f.k;
+      const inp = el('input', { type: 'file', id, accept: 'image/*', multiple: true });
+      inp.addEventListener('change', async () => {
+        const list = [];
+        for (const file of Array.from(inp.files).slice(0, f.max || 6)) {
+          const im = new Image(); im.src = URL.createObjectURL(file);
+          try { await new Promise((r, j) => { im.onload = r; im.onerror = j; }); list.push(im); } catch (e) {}
+        }
+        userImg[key] = list; render();
+      });
+      const clr = el('button', { type: 'button', className: 'btn', text: '清除 Clear' });
+      clr.addEventListener('click', () => { userImg[key] = null; inp.value = ''; render(); });
+      fs.appendChild(el('label', { className: 'f' }, [lab, el('div', { className: 'row' }, [inp, clr])]));
+    } else if (f.type === 'audio') {
+      fs.appendChild(buildAudioUI());
+    } else if (f.type === 'sfxlib') {
+      fs.appendChild(buildSfxUI());
+    } else if (f.type === 'thumbs') {
+      const box = el('div', { className: 'thumbs' });
+      f.list().forEach(src => {
+        const b = el('button', { type: 'button', className: f.wide ? 'wide' : '', title: src.split('/').pop().replace('.png', '') }, [el('img', { src, loading: 'lazy', alt: '' })]);
+        b.addEventListener('click', () => {
+          setVal(tab, f, src);
+          if (tab === 'se') userImg['se.pic'] = null;
+          if (tab === 'nu') userImg['nu.pic'] = null;
+          if (tab === 'news') userImg['news.hdr'] = null;
+          render();
+        });
+        box.appendChild(b);
+      });
+      fs.appendChild(el('div', { className: 'f' }, [lab, box]));
+    }
+  }
+}
 function buildForm() {
   const form = $('#form'); form.textContent = '';
   const s = getState(cur, lang);
   for (const g of T[cur].groups) {
-    const fs = el('fieldset', {}, [el('legend', { text: g.title })]);
-    for (const f of g.fields) {
-      const id = 'f-' + cur + '-' + f.k;
-      const lab = el('span', {}, [el('b', { text: f.label })]);
-      if (f.type === 'text' || f.type === 'textarea') {
-        const inp = f.type === 'text' ? el('input', { type: 'text', id, value: s[f.k] }) : el('textarea', { id, rows: f.rows || 4, value: s[f.k] });
-        inp.addEventListener('input', () => { setVal(cur, f, inp.value); render(); });
-        fs.appendChild(el('label', { className: 'f' }, [lab, inp]));
-      } else if (f.type === 'select') {
-        const sel = el('select', { id }, f.opts.map(o => el('option', { value: o[0], text: o[1] })));
-        sel.value = s[f.k];
-        sel.addEventListener('change', () => { setVal(cur, f, sel.value); render(); });
-        fs.appendChild(el('label', { className: 'f' }, [lab, sel]));
-      } else if (f.type === 'range') {
-        const inp = el('input', { type: 'range', id, min: f.min, max: f.max, step: f.step });
-        inp.value = s[f.k];
-        inp.addEventListener('input', () => { setVal(cur, f, +inp.value); render(); });
-        fs.appendChild(el('label', { className: 'f' }, [lab, inp]));
-      } else if (f.type === 'check') {
-        const inp = el('input', { type: 'checkbox', id, checked: !!s[f.k] });
-        inp.addEventListener('change', () => { setVal(cur, f, inp.checked); render(); });
-        fs.appendChild(el('label', { className: 'chk' }, [inp, el('span', { text: f.label })]));
-      } else if (f.type === 'image') {
-        const key = cur + '.' + f.k;
-        const inp = el('input', { type: 'file', id, accept: 'image/*' });
-        inp.addEventListener('change', () => readFile(inp.files[0], key));
-        const clr = el('button', { type: 'button', className: 'btn', text: '清除 Clear' });
-        clr.addEventListener('click', () => { userImg[key] = null; inp.value = ''; render(); });
-        fs.appendChild(el('label', { className: 'f' }, [lab, el('div', { className: 'row' }, [inp, clr])]));
-      } else if (f.type === 'images') {
-        const key = cur + '.' + f.k;
-        const inp = el('input', { type: 'file', id, accept: 'image/*', multiple: true });
-        inp.addEventListener('change', async () => {
-          const list = [];
-          for (const file of Array.from(inp.files).slice(0, f.max || 6)) {
-            const im = new Image(); im.src = URL.createObjectURL(file);
-            try { await new Promise((r, j) => { im.onload = r; im.onerror = j; }); list.push(im); } catch (e) {}
-          }
-          userImg[key] = list; render();
-        });
-        const clr = el('button', { type: 'button', className: 'btn', text: '清除 Clear' });
-        clr.addEventListener('click', () => { userImg[key] = null; inp.value = ''; render(); });
-        fs.appendChild(el('label', { className: 'f' }, [lab, el('div', { className: 'row' }, [inp, clr])]));
-      } else if (f.type === 'audio') {
-        fs.appendChild(buildAudioUI());
-      } else if (f.type === 'sfxlib') {
-        fs.appendChild(buildSfxUI());
-      } else if (f.type === 'thumbs') {
-        const box = el('div', { className: 'thumbs' });
-        f.list().forEach(src => {
-          const b = el('button', { type: 'button', className: f.wide ? 'wide' : '', title: src.split('/').pop().replace('.png', '') }, [el('img', { src, loading: 'lazy', alt: '' })]);
-          b.addEventListener('click', () => {
-            setVal(cur, f, src);
-            if (cur === 'se') userImg['se.pic'] = null;
-            if (cur === 'nu') userImg['nu.pic'] = null;
-            if (cur === 'news') userImg['news.hdr'] = null;
-            render();
-          });
-          box.appendChild(b);
-        });
-        fs.appendChild(el('div', { className: 'f' }, [lab, box]));
+    if (g.sub) {
+      const det = el('details', { className: 'submod' }, [el('summary', { text: g.title })]);
+      const body = el('div', { className: 'subbody' });
+      const subS = getState(g.sub, lang);
+      for (const sg of T[g.sub].groups) {
+        const flds = (sg.fields || []).filter(f => f.type !== 'audio' && f.type !== 'sfxlib');
+        if (!flds.length) continue;
+        const fs = el('fieldset', {}, [el('legend', { text: sg.title })]);
+        addFields(fs, g.sub, subS, flds);
+        body.appendChild(fs);
       }
+      det.appendChild(body);
+      form.appendChild(det);
+    } else if (g.collapsed) {
+      const det = el('details', { className: 'submod' }, [el('summary', { text: g.title })]);
+      const body = el('div', { className: 'subbody' });
+      addFields(body, cur, s, g.fields || []);
+      det.appendChild(body);
+      form.appendChild(det);
+    } else {
+      const fs = el('fieldset', {}, [el('legend', { text: g.title })]);
+      addFields(fs, cur, s, g.fields || []);
+      form.appendChild(fs);
     }
-    form.appendChild(fs);
   }
 }
 /* ---------- super event music: cut a clip out of any audio / video file ---------- */
