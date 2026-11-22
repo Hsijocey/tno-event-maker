@@ -411,14 +411,49 @@ T.news = {
   }
 };
 
-/* === In-game politics view (interface/countrypoliticsview.gui + TNO_SG_Politics.gui) === */
+/* === Official TNO ideology pie chart palette & order (from TNO 2438003901 common/ideologies/00_ideologies.txt + CN loc 2243912940) === */
+const TNO_IDEOS = [
+  { id: 'national_socialism',   zh: '民族社会主义', s: '民社',   en: 'National Socialism',   c: '#32211e', alt: ['#1e0d0a', '#281714', '#3c2b28', '#463532'] },
+  { id: 'fascism',              zh: '法西斯主义',   s: '法西斯', en: 'Fascism',              c: '#5a2d23', alt: ['#46190f', '#502319', '#64372d', '#6e4137'] },
+  { id: 'ultranationalism',     zh: '极端民族主义', s: '极民',   en: 'Ultranationalism',     c: '#191919', alt: ['#0f0f0f'] },
+  { id: 'despotism',            zh: '专制主义',     s: '专制',   en: 'Despotism',            c: '#414141', alt: ['#2d2d2d', '#373737', '#4b4b4b', '#555555'] },
+  { id: 'paternalism',          zh: '家长制',       s: '家长制', en: 'Paternalism',          c: '#6f6f6f', alt: ['#656565', '#797979'] },
+  { id: 'conservatism',         zh: '保守主义',     s: '保守',   en: 'Conservatism',         c: '#1a1a65', alt: ['#10105b', '#24246f'] },
+  { id: 'liberal_conservatism', zh: '自由保守主义', s: '自保',   en: 'Liberal Conservatism', c: '#2f367f', alt: [] },
+  { id: 'liberalism',           zh: '自由主义',     s: '自由',   en: 'Liberalism',           c: '#586593', alt: ['#4e5b89', '#626f9d'] },
+  { id: 'progressivism',        zh: '进步主义',     s: '进步',   en: 'Progressivism',        c: '#9a2b4d', alt: ['#8a2d49', '#912436'] },
+  { id: 'socialist',            zh: '社会主义',     s: '社主',   en: 'Socialism',            c: '#7b2121', alt: ['#731c1c', '#832626'] },
+  { id: 'communist',            zh: '共产主义',     s: '共产',   en: 'Communism',            c: '#5a1919', alt: ['#460f0f', '#501414', '#642323', '#6e2d2d'] },
+  { id: 'esoteric_nazism',      zh: '秘传纳粹',     s: '秘传',   en: 'Esoteric Nazism',      c: '#34164a', alt: ['#491d58'] }
+];
+function normHex(h) {
+  h = String(h || '#888888').trim().toLowerCase();
+  if (/^#[0-9a-f]{3}$/.test(h)) return '#' + h[1] + h[1] + h[2] + h[2] + h[3] + h[3];
+  return /^#[0-9a-f]{6}$/.test(h) ? h : '#888888';
+}
+function findIdeoByHex(hex) {
+  hex = normHex(hex);
+  return TNO_IDEOS.find(d => d.c === hex || d.alt.includes(hex)) || null;
+}
+function ideoOrder(item) {
+  const hit = findIdeoByHex(item.c) || TNO_IDEOS.find(d => item.name && (item.name === d.zh || item.name === d.en || item.name === d.s));
+  return hit ? TNO_IDEOS.indexOf(hit) : 999;
+}
 function parsePie(txt) {
   const out = [];
   String(txt || '').split('\n').forEach(line => {
     const m = line.match(/(-?\d+(?:\.\d+)?)/), c = line.match(/#[0-9a-fA-F]{3,8}\b/);
-    if (m && +m[1] > 0) out.push({ v: +m[1], c: c ? c[0] : '#888888' });
+    if (m && +m[1] > 0) {
+      const hex = normHex(c ? c[0] : '#888888');
+      let name = line.replace(m[0], '').replace(c ? c[0] : '', '').trim();
+      if (!name) { const hit = findIdeoByHex(hex); if (hit) name = hit.zh; }
+      out.push({ v: +m[1], c: hex, name });
+    }
   });
   return out;
+}
+function formatPie(rows) {
+  return rows.map(r => (Math.round(r.v * 10) / 10) + ' ' + normHex(r.c) + (r.name ? ' ' + r.name.trim() : '')).join('\n');
 }
 function fitIn(c, im, x, y, w, h, maxScale) {
   const sc = Math.min(w / im.width, h / im.height, maxScale || 1), dw = im.width * sc, dh = im.height * sc;
@@ -436,10 +471,10 @@ T.pol = {
       { k: 'faction', type: 'image', label: '阵营图标 Faction icon（可选）' },
       { k: 'flag', type: 'image', label: '国旗 Flag（可选，显示在标题栏左侧）' }
     ] },
-    { title: '饼图 Pie chart', fields: [
-      { k: 'pie', type: 'textarea', label: '每行一块：百分比 + 颜色（#十六进制），后面可写备注', rows: 6,
-        zh: '38 #3a6fb5 自由保守主义\n27 #5aa0d8 自由主义\n14 #c9a227 进步主义\n9 #b03a3a 社会民主主义\n7 #6b4a8c 威权民主\n5 #4a4a4a 其他',
-        en: '38 #3a6fb5 Liberal Conservatism\n27 #5aa0d8 Liberalism\n14 #c9a227 Progressivism\n9 #b03a3a Social Democracy\n7 #6b4a8c Authoritarian Democracy\n5 #4a4a4a Others' }
+    { title: '饼图 Pie chart（TNO 官方色板 · 拖动自动配平）', fields: [
+      { k: 'pie', type: 'pie', label: '点选 TNO 意识形态增减，拖动滑块自动调比例',
+        zh: '5 #5a2d23 法西斯主义\n7 #6f6f6f 家长制\n9 #1a1a65 保守主义\n38 #2f367f 自由保守主义\n27 #586593 自由主义\n14 #9a2b4d 进步主义',
+        en: '5 #5a2d23 Fascism\n7 #6f6f6f Paternalism\n9 #1a1a65 Conservatism\n38 #2f367f Liberal Conservatism\n27 #586593 Liberalism\n14 #9a2b4d Progressivism' }
     ] },
     { title: '国策与国家精神 Focus & spirits', fields: [
       { k: 'goal', type: 'text', label: '当前国策 Active focus', zh: '重建美国', en: 'Rebuilding America' },
@@ -894,8 +929,9 @@ function dpGroups(kind) {
       ...picFields('portrait', '领袖头像 Portrait'),
       { k: 'flag', type: 'image', label: '国旗 Flag' },
       { k: 'samples', type: 'check', label: '没上传头像时显示剪影', def: true },
-      { k: 'pie', type: 'textarea', rows: 5, label: '饼图：每行「百分比 颜色」',
-        zh: '8 #303030\n14 #7a261f\n14 #1f2f78\n22 #2a2a2a\n20 #333333\n22 #3b3b3b', en: '8 #303030\n14 #7a261f\n14 #1f2f78\n22 #2a2a2a\n20 #333333\n22 #3b3b3b' }
+      { k: 'pie', type: 'pie', label: '饼图 Pie chart（TNO 官方色板 · 自动配平）',
+        zh: '14 #32211e 民族社会主义\n22 #191919 极端民族主义\n22 #414141 专制主义\n20 #6f6f6f 家长制\n14 #1a1a65 保守主义\n8 #7b2121 社会主义',
+        en: '14 #32211e National Socialism\n22 #191919 Ultranationalism\n22 #414141 Despotism\n20 #6f6f6f Paternalism\n14 #1a1a65 Conservatism\n8 #7b2121 Socialism' }
     ] }
   ];
   if (kind === 'b') g.splice(1, 0, { title: '界面标签 Labels（改了才重画，不改就用工程里的原样）', fields: [
@@ -976,7 +1012,9 @@ T.dv = {
       { k: 'party', type: 'text', label: '执政党 Ruling party', zh: '全俄军官联盟 - 军官系', en: 'All-Russian Officers\' Union - Officers' },
       { k: 'ideology', type: 'text', label: '意识形态 Ideology', zh: '贵族保守主义', en: 'Aristocratic Conservatism' },
       { k: 'elections', type: 'text', label: '选举 Elections', zh: '无选举', en: 'No Elections' },
-      { k: 'pie', type: 'textarea', rows: 4, label: '饼图：每行「百分比 颜色」（从 3 点钟方向顺时针）', zh: '12 #1c1f7a\n33 #6a6a6a\n55 #474747', en: '12 #1c1f7a\n33 #6a6a6a\n55 #474747' }
+      { k: 'pie', type: 'pie', label: '饼图 Pie chart（TNO 官方色板，3 点钟顺时针）',
+        zh: '55 #414141 专制主义\n33 #6f6f6f 家长制\n12 #1a1a65 保守主义',
+        en: '55 #414141 Despotism\n33 #6f6f6f Paternalism\n12 #1a1a65 Conservatism' }
     ] },
     { title: '国策 Focus', fields: [
       { k: 'goal', type: 'text', label: '当前国策 Active focus', zh: '帝国近卫军的遗产', en: 'Legacy of the Imperial Guard' },
@@ -1290,6 +1328,227 @@ function readFile(file, key) {
   im.onerror = () => { statusEl.className = 'status err'; statusEl.textContent = '这个文件不是浏览器能打开的图片（DDS/TGA 请先转成 PNG）'; };
   im.src = url;
 }
+function rebalancePie(rows, fixedIdx, newVal) {
+  const n = rows.length;
+  if (n === 0) return;
+  const v = Math.max(0, Math.min(100, Math.round(newVal)));
+  if (n === 1) { rows[0].v = v || 100; return; }
+  rows[fixedIdx].v = v;
+  const rem = 100 - v;
+  let sumOther = 0;
+  for (let i = 0; i < n; i++) if (i !== fixedIdx) sumOther += Math.max(0, rows[i].v);
+  let assigned = 0;
+  const others = [];
+  for (let i = 0; i < n; i++) if (i !== fixedIdx) others.push(i);
+  others.forEach((idx, k) => {
+    if (k === others.length - 1) {
+      rows[idx].v = Math.max(0, rem - assigned);
+    } else {
+      const share = sumOther > 0 ? Math.round(rem * Math.max(0, rows[idx].v) / sumOther) : Math.round(rem / others.length);
+      const clamped = Math.max(0, Math.min(rem - assigned, share));
+      rows[idx].v = clamped;
+      assigned += clamped;
+    }
+  });
+}
+function normalizePie100(rows) {
+  const n = rows.length;
+  if (!n) return;
+  const tot = rows.reduce((a, r) => a + Math.max(0, r.v), 0);
+  if (tot <= 0) {
+    const base = Math.floor(100 / n), extra = 100 - base * n;
+    rows.forEach((r, i) => { r.v = base + (i < extra ? 1 : 0); });
+    return;
+  }
+  let assigned = 0;
+  rows.forEach((r, i) => {
+    if (i === n - 1) r.v = Math.max(0, 100 - assigned);
+    else { r.v = Math.round(100 * Math.max(0, r.v) / tot); assigned += r.v; }
+  });
+}
+function buildPieUI(tab, f, initVal) {
+  let rows = parsePie(initVal);
+  if (!rows.length) rows = [{ v: 100, c: '#414141', name: lang === 'zh' ? '专制主义' : 'Despotism' }];
+  let autoBal = true, showRaw = false;
+
+  const wrap = el('div', { className: 'pie-ed' });
+  const bar = el('div', { className: 'pie-bar' });
+  const pal = el('div', { className: 'pie-pal' });
+  const list = el('div', { className: 'pie-rows' });
+  const tools = el('div', { className: 'pie-tools' });
+  const raw = el('textarea', { rows: 4, value: formatPie(rows) });
+  raw.hidden = true;
+
+  const totEl = el('span', { className: 'pie-tot' });
+  const rowRefs = [];
+
+  function syncBarAndTotal() {
+    bar.textContent = '';
+    const tot = rows.reduce((a, r) => a + Math.max(0, r.v), 0) || 1;
+    rows.forEach(r => {
+      if (r.v <= 0) return;
+      const seg = el('span');
+      seg.style.width = (r.v / tot * 100).toFixed(2) + '%';
+      seg.style.background = normHex(r.c);
+      seg.title = (r.name || r.c) + ' ' + r.v + '%';
+      bar.appendChild(seg);
+    });
+    const sum = Math.round(rows.reduce((a, r) => a + Math.max(0, r.v), 0) * 10) / 10;
+    totEl.textContent = '合计 ' + sum + '%';
+    totEl.style.color = Math.abs(sum - 100) < 0.5 ? 'var(--crt)' : 'var(--warn)';
+  }
+
+  function syncPaletteState() {
+    const activeSet = new Set(rows.map(r => {
+      const h = findIdeoByHex(r.c);
+      return h ? h.id : '';
+    }));
+    Array.from(pal.children).forEach(btn => {
+      btn.classList.toggle('on', activeSet.has(btn.dataset.id));
+    });
+  }
+
+  function commit(immediate) {
+    const txt = formatPie(rows);
+    raw.value = txt;
+    syncBarAndTotal();
+    syncPaletteState();
+    setVal(tab, f, txt);
+    render(immediate);
+  }
+
+  function rebuildRows() {
+    list.textContent = '';
+    rowRefs.length = 0;
+    rows.forEach((r, idx) => {
+      const col = el('input', { type: 'color', value: normHex(r.c), title: '选择颜色' });
+      const nm = el('input', { type: 'text', value: r.name || '', placeholder: '意识形态' });
+      const rng = el('input', { type: 'range', min: 0, max: 100, step: 1 });
+      rng.value = Math.round(r.v);
+      const num = el('input', { type: 'number', min: 0, max: 100, step: 1 });
+      num.value = Math.round(r.v);
+      const del = el('button', { type: 'button', className: 'pie-del', text: '×', title: '删除此色块' });
+
+      const onVal = (val, immediate) => {
+        const nv = Math.max(0, Math.min(100, +val || 0));
+        if (autoBal) {
+          rebalancePie(rows, idx, nv);
+          rowRefs.forEach((ref, j) => {
+            ref.rng.value = Math.round(rows[j].v);
+            ref.num.value = Math.round(rows[j].v);
+          });
+        } else {
+          rows[idx].v = nv;
+          rng.value = nv;
+          num.value = nv;
+        }
+        commit(immediate);
+      };
+      rng.addEventListener('input', () => onVal(rng.value, false));
+      num.addEventListener('input', () => onVal(num.value, false));
+      col.addEventListener('input', () => {
+        rows[idx].c = normHex(col.value);
+        const hit = findIdeoByHex(rows[idx].c);
+        if (hit && !rows[idx].name) { rows[idx].name = lang === 'zh' ? hit.zh : hit.en; nm.value = rows[idx].name; }
+        commit(false);
+      });
+      nm.addEventListener('input', () => { rows[idx].name = nm.value; commit(false); });
+      del.addEventListener('click', () => {
+        if (rows.length <= 1) return;
+        rows.splice(idx, 1);
+        if (autoBal) normalizePie100(rows);
+        rebuildRows();
+        commit(true);
+      });
+
+      const rowEl = el('div', { className: 'pie-row' }, [col, nm, rng, num, del]);
+      rowRefs.push({ rng, num, col, nm });
+      list.appendChild(rowEl);
+    });
+    syncBarAndTotal();
+    syncPaletteState();
+  }
+
+  // Official TNO ideology quick-toggle palette
+  TNO_IDEOS.forEach(d => {
+    const dot = el('i'); dot.style.background = d.c;
+    const label = lang === 'zh' ? d.s : d.en;
+    const b = el('button', { type: 'button', title: (lang === 'zh' ? d.zh + ' · ' + d.en : d.en + ' · ' + d.zh) + ' (' + d.c + ')' }, [dot, document.createTextNode(label)]);
+    b.dataset.id = d.id;
+    b.addEventListener('click', () => {
+      const exIdx = rows.findIndex(r => { const h = findIdeoByHex(r.c); return h && h.id === d.id; });
+      if (exIdx >= 0) {
+        if (rows.length <= 1) return;
+        rows.splice(exIdx, 1);
+        if (autoBal) normalizePie100(rows);
+      } else {
+        const initShare = rows.length ? Math.max(10, Math.round(100 / (rows.length + 1))) : 100;
+        const item = { v: initShare, c: d.c, name: lang === 'zh' ? d.zh : d.en };
+        rows.push(item);
+        rows.sort((a, b2) => ideoOrder(a) - ideoOrder(b2));
+        if (autoBal) {
+          const newIdx = rows.indexOf(item);
+          rebalancePie(rows, newIdx, initShare);
+        }
+      }
+      rebuildRows();
+      commit(true);
+    });
+    pal.appendChild(b);
+  });
+
+  // Tools bar
+  const balChk = el('input', { type: 'checkbox', checked: true });
+  balChk.addEventListener('change', () => {
+    autoBal = balChk.checked;
+    if (autoBal) { normalizePie100(rows); rebuildRows(); commit(true); }
+  });
+  const btnSort = el('button', { type: 'button', className: 'btn', text: '按 TNO 顺序' });
+  btnSort.addEventListener('click', () => {
+    rows.sort((a, b2) => ideoOrder(a) - ideoOrder(b2));
+    rebuildRows(); commit(true);
+  });
+  const btnEq = el('button', { type: 'button', className: 'btn', text: '均分' });
+  btnEq.addEventListener('click', () => {
+    const n = rows.length, base = Math.floor(100 / n), extra = 100 - base * n;
+    rows.forEach((r, i) => { r.v = base + (i < extra ? 1 : 0); });
+    rebuildRows(); commit(true);
+  });
+  const btnAdd = el('button', { type: 'button', className: 'btn', text: '+ 自定义' });
+  btnAdd.addEventListener('click', () => {
+    const item = { v: 15, c: '#59c7c2', name: lang === 'zh' ? '自定义' : 'Custom' };
+    rows.push(item);
+    if (autoBal) rebalancePie(rows, rows.length - 1, 15);
+    rebuildRows(); commit(true);
+  });
+  const btnRaw = el('button', { type: 'button', className: 'btn', text: '文本' });
+  btnRaw.addEventListener('click', () => {
+    showRaw = !showRaw;
+    raw.hidden = !showRaw;
+    btnRaw.textContent = showRaw ? '收起文本' : '文本';
+  });
+  raw.addEventListener('input', () => {
+    const parsed = parsePie(raw.value);
+    if (parsed.length) { rows = parsed; rebuildRows(); }
+    setVal(tab, f, raw.value);
+    render();
+  });
+
+  tools.appendChild(el('label', { className: 'chk' }, [balChk, el('span', { text: '自动配平 100%' })]));
+  tools.appendChild(btnSort);
+  tools.appendChild(btnEq);
+  tools.appendChild(btnAdd);
+  tools.appendChild(btnRaw);
+  tools.appendChild(totEl);
+
+  rebuildRows();
+  wrap.appendChild(bar);
+  wrap.appendChild(pal);
+  wrap.appendChild(list);
+  wrap.appendChild(tools);
+  wrap.appendChild(raw);
+  return wrap;
+}
 function addFields(fs, tab, s, fields) {
   for (const f of fields) {
     const id = 'f-' + cur + '-' + tab + '-' + f.k;
@@ -1333,6 +1592,8 @@ function addFields(fs, tab, s, fields) {
       const clr = el('button', { type: 'button', className: 'btn', text: '清除 Clear' });
       clr.addEventListener('click', () => { userImg[key] = null; imgRev++; inp.value = ''; render(true); });
       fs.appendChild(el('label', { className: 'f' }, [lab, el('div', { className: 'row' }, [inp, clr])]));
+    } else if (f.type === 'pie') {
+      fs.appendChild(el('div', { className: 'f' }, [lab, buildPieUI(tab, f, s[f.k])]));
     } else if (f.type === 'audio') {
       fs.appendChild(buildAudioUI());
     } else if (f.type === 'sfxlib') {
