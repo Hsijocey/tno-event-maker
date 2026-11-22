@@ -10,6 +10,7 @@ const imgCache = {};
 function loadImg(src) {
   if (!imgCache[src]) imgCache[src] = new Promise((res, rej) => {
     const im = new Image();
+    im.decoding = 'async';
     im.onload = () => res(im);
     im.onerror = () => rej(new Error('无法加载 ' + src));
     im.src = src;
@@ -22,12 +23,18 @@ const A = n => loadImg('assets/' + n + '?v=' + ASSET_VER);
 /* ---------- bitmap fonts ---------- */
 const fontCache = {}, FONT_VER = '6';   // bump when an atlas is rebuilt so browsers do not keep the old one
 function loadFont(name) {
-  if (!fontCache[name]) fontCache[name] = new Promise((res, rej) => {
-    const s = document.createElement('script');
-    s.src = 'fonts/' + name + '.js?v=' + FONT_VER;
-    s.onerror = () => rej(new Error('无法加载字体 ' + name));
-    s.onload = () => {
-      const d = window.TNOFONT[name];
+  if (!fontCache[name]) {
+    // fetch the glyph-table JS and the WebP atlas in parallel instead of sequentially
+    const imgP = loadImg('fonts/' + name + '.webp?v=' + FONT_VER);
+    const jsP = new Promise((res, rej) => {
+      if (window.TNOFONT && window.TNOFONT[name]) return res(window.TNOFONT[name]);
+      const s = document.createElement('script');
+      s.src = 'fonts/' + name + '.js?v=' + FONT_VER;
+      s.onerror = () => rej(new Error('无法加载字体 ' + name));
+      s.onload = () => res(window.TNOFONT[name]);
+      document.head.appendChild(s);
+    });
+    fontCache[name] = Promise.all([jsP, imgP]).then(([d, im]) => {
       const bin = atob(d.data), u8 = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
       const dv = new DataView(u8.buffer), map = new Map();
@@ -39,10 +46,9 @@ function loadFont(name) {
       const kern = new Map();
       d.kern.forEach(k => kern.set(k[0] * 65536 + k[1], k[2]));
       d.data = null;
-      loadImg('fonts/' + d.img + '?v=' + FONT_VER).then(im => res({ name, lh: d.lh, base: d.base, map, kern, img: im }), rej);
-    };
-    document.head.appendChild(s);
-  });
+      return { name, lh: d.lh, base: d.base, map, kern, img: im };
+    });
+  }
   return fontCache[name];
 }
 function loadChain(slot, lang) {
@@ -258,22 +264,26 @@ T.se = {
     { title: '配乐 Music', fields: [{ k: 'music', type: 'audio' }] }
   ],
   async draw(s, lang) {
-    const [fTitle, fBomb] = await Promise.all([loadChain('aldrich_24_outline', lang), loadChain('Bomb_24', lang)]);
-    const [tile, border, under, btn] = await Promise.all([A('tiled_bg.png'), A('bigevent_border.png'), A('se_underlay.png'), A('button_221x34.png')]);
+    const up = userImg['se.pic'];
+    const [fTitle, fBomb, tile, border, under, btn, presetIm, nukeTitle, nukeFrame] = await Promise.all([
+      loadChain('aldrich_24_outline', lang), loadChain('Bomb_24', lang),
+      A('tiled_bg.png'), A('bigevent_border.png'), A('se_underlay.png'), A('button_221x34.png'),
+      up ? null : loadImg(s.preset),
+      s.nuke ? A('nuke_super_title.png') : null, s.nuke ? A('nuke_super_frame.png') : null
+    ]);
     const OX = 1, OY = 46;
     cv.width = 590; cv.height = 527; ctx.clearRect(0, 0, cv.width, cv.height);
     ctx.save(); ctx.translate(OX, OY);
     // title container at (7,-45) 570x128
     cornered(ctx, tile, 7, -45, 570, 128, 64, 64, true);
-    if (s.nuke) ctx.drawImage(await A('nuke_super_title.png'), 7, -45);
+    if (nukeTitle) ctx.drawImage(nukeTitle, 7, -45);
     textBox(ctx, s.title, fTitle, 'aldrich_24_outline', { x: 7, y: -45 + 18, w: 580, fmt: 'center' });
     // picture at (6,7)
-    const up = userImg['se.pic'];
     if (up) ctx.drawImage(fxCanvas(up, 573, 455, pp(s, 'pic'), s.filter === 'teal' ? 'teal' : 'raw', s.filter === 'raw' ? 0 : +s.scan), 6, 7);
-    else ctx.drawImage(await loadImg(s.preset), 6, 7);
+    else ctx.drawImage(presetIm, 6, 7);
     // frame container 585x480
     cornered(ctx, border, 0, 0, 585, 480, 64, 71, false);
-    if (s.nuke) ctx.drawImage(await A('nuke_super_frame.png'), 0, 0);
+    if (nukeFrame) ctx.drawImage(nukeFrame, 0, 0);
     const bx = 292 - 110, by = 240 + 183;
     ctx.drawImage(btn, bx, by);
     textBox(ctx, s.option, fBomb, 'Bomb_24', { x: bx, y: by, w: 221, h: 34, fmt: 'center', vcenter: true, maxLines: 1 });
@@ -315,8 +325,12 @@ T.report = {
     ] }
   ],
   async draw(s, lang) {
-    const [f22, f16] = await Promise.all([loadChain('hoi4_typewriter22', lang), loadChain('hoi4_typewriter16', lang)]);
-    const [top, mid, bot, clip, opt, mini] = await Promise.all([A('report_top.png'), A('report_mid.png'), A('report_bottom.png'), A('pic_clip.png'), A('option_entry.png'), A('btn_minimize.png')]);
+    const up = userImg['report.pic'];
+    const [f22, f16, top, mid, bot, clip, opt, mini, sampleIm] = await Promise.all([
+      loadChain('hoi4_typewriter22', lang), loadChain('hoi4_typewriter16', lang),
+      A('report_top.png'), A('report_mid.png'), A('report_bottom.png'), A('pic_clip.png'), A('option_entry.png'), A('btn_minimize.png'),
+      up ? null : A('samples/report_event2.png')
+    ]);
     const st = STYLE.tw;
     const L = layout(s.desc, f16, 460, st);
     const opts = String(s.options || '').split('\n').map(x => x.trim()).filter(Boolean);
@@ -333,9 +347,8 @@ T.report = {
     ctx.drawImage(mini, 50, 75);
     textBox(ctx, s.title, f22, 'hoi4_typewriter22', { x: 45, y: lang === 'zh' ? 138 : 130, w: 484, fmt: 'center', maxLines: 1 });
     drawLayout(ctx, L, 62, 193, 460, 'left');
-    const up = userImg['report.pic'];
     if (up) ctx.drawImage(s.frame === 'asis' ? up : polaroid(up, pp(s, 'pic'), s.frame === 'polaroid'), 1 + 5, by);
-    else ctx.drawImage(await A('samples/report_event2.png'), 1 + 5, by);
+    else ctx.drawImage(sampleIm, 1 + 5, by);
     ctx.drawImage(clip, 1 - 3, by + 35);
     opts.forEach((o, i) => {
       const ox = 1 + 215 - 10, oy = by - 10 - extra + i * 52;
@@ -368,19 +381,22 @@ T.news = {
     ] }
   ],
   async draw(s, lang) {
-    const [f22, f16] = await Promise.all([loadChain('hoi4_typewriter22', lang), loadChain('hoi4_typewriter16', lang)]);
-    const [bg, ov, opt, mini] = await Promise.all([A('news_bg.png'), A('news_pic_overlay.png'), A('option_entry.png'), A('btn_minimize.png')]);
+    const up = userImg['news.pic'], hdrUp = userImg['news.hdr'];
+    const [f22, f16, bg, ov, opt, mini, sampleIm, hdIm] = await Promise.all([
+      loadChain('hoi4_typewriter22', lang), loadChain('hoi4_typewriter16', lang),
+      A('news_bg.png'), A('news_pic_overlay.png'), A('option_entry.png'), A('btn_minimize.png'),
+      up ? null : A('samples/news_event.png'), hdrUp ? null : loadImg(s.header)
+    ]);
     const OX = 0, OY = 16;
     cv.width = 528; cv.height = 595 + OY + 4; ctx.clearRect(0, 0, cv.width, cv.height);
     ctx.save(); ctx.translate(OX, OY);
     ctx.drawImage(bg, 0, 0);
-    const up = userImg['news.pic'];
     if (up) ctx.drawImage(fxCanvas(up, 161, 420, pp(s, 'pic'), s.gray ? 'gray' : 'raw', 0), 27, 140);
-    else ctx.drawImage(await A('samples/news_event.png'), 27, 140);
+    else ctx.drawImage(sampleIm, 27, 140);
     ctx.drawImage(ov, 27, 140);
     // title text is "\n£header\n\n\n\n" + title : header icon sits on line 1, title on line 5
     const ty = lang === 'zh' ? -9 : -12, lh = f22[0].lh;
-    const hd = userImg['news.hdr'] || await loadImg(s.header);
+    const hd = hdrUp || hdIm;
     ctx.drawImage(hd, 31 + Math.floor((460 - hd.width) / 2), ty + lh);
     textBox(ctx, s.title, f22, 'hoi4_typewriter22', { x: 31, y: ty + lh * 5, w: 460, fmt: 'center', maxLines: 1 });
     ctx.drawImage(mini, 5, 40);
@@ -446,8 +462,10 @@ T.pol = {
     ] }
   ],
   async draw(s, lang) {
-    const [b36, b18, b16, a22, a20, a18] = await Promise.all(['Bomb_36', 'Bomb_18', 'Bomb_16', 'aldrich_22_outline', 'aldrich_20_outline', 'aldrich_18_outline'].map(n => loadChain(n, lang)));
-    const [win, hdr, bg, pov, lfr, gbg, gbtn, gfr, gfill, cath, cati, close, gunk, unk, btn, btnU] = await Promise.all(['pol_window.png', 'pol_header.png', 'pol_bg.png', 'pol_pie_overlay.png', 'pol_leader_frame.png', 'pol_goal_bg.png', 'pol_goal_button.png', 'pol_goal_progress_frame.png', 'pol_goal_progress.png', 'pol_cat_header.png', 'pol_cat_icons.png', 'pol_close.png', 'goal_unknown.png', 'leader_unknown.png', 'tno_button_148.png', 'tno_button_148_underlay.png'].map(A));
+    const [b36, b18, b16, a22, a20, a18, win, hdr, bg, pov, lfr, gbg, gbtn, gfr, gfill, cath, cati, close, gunk, unk, btn, btnU] = await Promise.all([
+      ...['Bomb_36', 'Bomb_18', 'Bomb_16', 'aldrich_22_outline', 'aldrich_20_outline', 'aldrich_18_outline'].map(n => loadChain(n, lang)),
+      ...['pol_window.png', 'pol_header.png', 'pol_bg.png', 'pol_pie_overlay.png', 'pol_leader_frame.png', 'pol_goal_bg.png', 'pol_goal_button.png', 'pol_goal_progress_frame.png', 'pol_goal_progress.png', 'pol_cat_header.png', 'pol_cat_icons.png', 'pol_close.png', 'goal_unknown.png', 'leader_unknown.png', 'tno_button_148.png', 'tno_button_148_underlay.png'].map(A)
+    ]);
     cv.width = 550; cv.height = 526; ctx.clearRect(0, 0, cv.width, cv.height);
     cornered(ctx, win, 0, 0, 549, 526, 64, 64, true);
     ctx.drawImage(hdr, 5, 3);
@@ -545,8 +563,10 @@ T.cs = {
     ] }
   ],
   async draw(s, lang) {
-    const [f24, f20, f16, b18, b16] = await Promise.all(['aldrich_24_outline', 'aldrich_20_outline', 'aldrich_16_outline', 'Bomb_18', 'Bomb_16'].map(n => loadChain(n, lang)));
-    const [bg, cover, pov, btn, btnU, unk] = await Promise.all([A('cs_bg.png'), A('cs_cover.png'), A('cs_portrait_overlay.png'), A('tno_button_148.png'), A('tno_button_148_underlay.png'), A('leader_unknown.png')]);
+    const [f24, f20, f16, b18, b16, bg, cover, pov, btn, btnU, unk] = await Promise.all([
+      ...['aldrich_24_outline', 'aldrich_20_outline', 'aldrich_16_outline', 'Bomb_18', 'Bomb_16'].map(n => loadChain(n, lang)),
+      ...['cs_bg.png', 'cs_cover.png', 'cs_portrait_overlay.png', 'tno_button_148.png', 'tno_button_148_underlay.png', 'leader_unknown.png'].map(A)
+    ]);
     const cropY = s.crop === 'bottom' ? 412 : 0;
     cv.width = 1237; cv.height = 717 - cropY; ctx.clearRect(0, 0, cv.width, cv.height);
     ctx.save(); ctx.translate(0, -cropY);
@@ -609,8 +629,10 @@ T.ci = {
     ] }
   ],
   async draw(s, lang) {
-    const [f32, f20, f18, b16] = await Promise.all(['aldrich_32_outline', 'aldrich_20_outline', 'aldrich_18_outline', 'Bomb_16'].map(n => loadChain(n, lang)));
-    const [bg, tabs, i1, i2, i3, fold, cont, glow, btn, pnone, fov] = await Promise.all(['ci_bg.png', 'ci_tabs.png', 'ci_tab_icon_1.png', 'ci_tab_icon_2.png', 'ci_tab_icon_3.png', 'ci_folder.png', 'ci_content.png', 'ci_content_glow.png', 'button_123x34.png', 'ci_poster_none.png', 'flag_small_overlay.png'].map(A));
+    const [f32, f20, f18, b16, bg, tabs, i1, i2, i3, fold, cont, glow, btn, pnone, fov] = await Promise.all([
+      ...['aldrich_32_outline', 'aldrich_20_outline', 'aldrich_18_outline', 'Bomb_16'].map(n => loadChain(n, lang)),
+      ...['ci_bg.png', 'ci_tabs.png', 'ci_tab_icon_1.png', 'ci_tab_icon_2.png', 'ci_tab_icon_3.png', 'ci_folder.png', 'ci_content.png', 'ci_content_glow.png', 'button_123x34.png', 'ci_poster_none.png', 'flag_small_overlay.png'].map(A)
+    ]);
     const OY = 40;
     cv.width = 943; cv.height = 442 + OY; ctx.clearRect(0, 0, cv.width, cv.height);
     ctx.save(); ctx.translate(0, OY);
@@ -657,15 +679,23 @@ T.ci = {
 /* ---------- state + UI ---------- */
 /* === The user's own "new UI" super event (凉的小模板100.ipv): cold-war frame, FZZJ-WHJZTJW text with a
        darkened lower half ("3D" look) and a soft halo. Drawn at 2x (frame is 602x454 at 1x). === */
+let nuPicCache = { key: '', canvas: null };
 function nuPicture(im, w, h, p, mode) {
+  const key = [im.src || '', im.naturalWidth, im.naturalHeight, w, h, p ? p.zoom : 1, p ? p.px : 0.5, p ? p.py : 0.5, mode].join('|');
+  if (nuPicCache.key === key && nuPicCache.canvas) return nuPicCache.canvas;
   const t = fxCanvas(im, w, h, p, mode === 'raw' ? 'raw' : 'gray', 0);
-  if (mode !== 'bwca') return t;
-  const tc = t.getContext('2d'), d = tc.getImageData(0, 0, w, h), a = d.data, src = new Uint8ClampedArray(a), sh = 5;
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-    const i = (y * w + x) * 4, xl = Math.max(0, x - sh), xr = Math.min(w - 1, x + sh);
-    a[i] = src[(y * w + xr) * 4]; a[i + 2] = src[(y * w + xl) * 4 + 2];
+  if (mode === 'bwca') {
+    const tc = t.getContext('2d'), d = tc.getImageData(0, 0, w, h), a = d.data, src = new Uint8ClampedArray(a), sh = 5;
+    for (let y = 0; y < h; y++) {
+      const row = y * w;
+      for (let x = 0; x < w; x++) {
+        const i = (row + x) * 4, xl = x > sh ? x - sh : 0, xr = x + sh < w ? x + sh : w - 1;
+        a[i] = src[(row + xr) * 4]; a[i + 2] = src[(row + xl) * 4 + 2];
+      }
+    }
+    tc.putImageData(d, 0, 0);
   }
-  tc.putImageData(d, 0, 0);
+  nuPicCache = { key, canvas: t };
   return t;
 }
 const nuT = document.createElement('canvas'), nuTc = nuT.getContext('2d');
@@ -701,16 +731,20 @@ function nuText(c, text, font, o) {
   c.drawImage(nuT, 0, 0, W, H, x, y, W, H);
 }
 async function drawNuTo(outCv, outCtx, s, lang, useCwLabels) {
-  const [ft, fb] = await Promise.all(['nu_title', 'nu_button'].map(loadFont)), fq = fb;
-  const [base, glass, frame] = await Promise.all(['nu_base.png', 'nu_glass.png', useCwLabels ? 'nu_frame_cw.png' : 'nu_frame.png'].map(A));
+  const up = userImg['nu.pic'];
+  const [ft, fb, base, glass, frame, presetIm] = await Promise.all([
+    loadFont('nu_title'), loadFont('nu_button'),
+    A('nu_base.png'), A('nu_glass.png'), A(useCwLabels ? 'nu_frame_cw.png' : 'nu_frame.png'),
+    up ? null : loadImg(s.preset)
+  ]);
+  const fq = fb, im = up || presetIm;
   outCv.width = 1204; outCv.height = 908; outCtx.clearRect(0, 0, outCv.width, outCv.height);
   outCtx.drawImage(base, 0, 0);
-  const im = userImg['nu.pic'] || await loadImg(s.preset);
   outCtx.save();
   outCtx.beginPath();
   const x = 42, y = 140, w = 1116, h = 652, r = 24;
   outCtx.moveTo(x + r, y); outCtx.arcTo(x + w, y, x + w, y + h, r); outCtx.arcTo(x + w, y + h, x, y + h, r); outCtx.arcTo(x, y + h, x, y, r); outCtx.arcTo(x, y, x + w, y, r); outCtx.closePath(); outCtx.clip();
-  outCtx.drawImage(nuPicture(im, w, h, userImg['nu.pic'] ? pp(s, 'pic') : null, s.filter), x, y);
+  outCtx.drawImage(nuPicture(im, w, h, up ? pp(s, 'pic') : null, s.filter), x, y);
   outCtx.restore();
   outCtx.drawImage(glass, 0, 0);
   outCtx.drawImage(frame, 0, 0);
@@ -875,9 +909,15 @@ async function drawPanelTo(outCv, outCtx, kind, key, s, lang) {
   const P = DP[kind], zh = lang === 'zh', G = P[zh ? 'zh' : 'en'];
   // B keeps the project's sizes (28/32 and 26/30 px at 2x); A is one size smaller at the user's request (26/30 and 24/28)
   const F = P.fonts || { zi: 'zy_28', zp: 'zy_32', ei: 'ox_26', ep: 'ox_30' };
-  const [zyI, zyP, oxI, oxP, zy28, ox29, ox30] = await Promise.all([F.zi, F.zp, F.ei, F.ep, 'zy_28', 'ox_29', 'ox_30'].map(loadFont));
   const edited = kind === 'b' && ['tab1', 'tab2', 'side'].some(k => String(s[k]).trim() !== DP_LABELS[k]);
-  const [frame, base, glass, unk] = await Promise.all([A(edited ? P.clean : P.frame), P.base ? A(P.base) : null, P.glass ? A(P.glass) : null, A('leader_unknown.png')]);
+  const needUnk = !userImg[key + '.portrait'] && !!s.samples;
+  // Load only the fonts actually needed for the active language + label state, in parallel with frame textures
+  const [zyI, zyP, oxI, oxP, zy28, ox29, ox30, frame, base, glass, unk] = await Promise.all([
+    loadFont(F.zi), loadFont(F.zp),
+    zh ? null : loadFont(F.ei), zh ? null : loadFont(F.ep),
+    edited ? loadFont('zy_28') : null, edited ? loadFont('ox_29') : null, edited ? loadFont('ox_30') : null,
+    A(edited ? P.clean : P.frame), P.base ? A(P.base) : null, P.glass ? A(P.glass) : null, needUnk ? A('leader_unknown.png') : null
+  ]);
   outCv.width = P.W; outCv.height = P.H; outCtx.clearRect(0, 0, P.W, P.H);
   const img = k => userImg[key + '.' + k];
   // screens behind the cut-outs
@@ -956,9 +996,11 @@ T.dv = {
     ] }
   ],
   async draw(s, lang) {
-    const [b16, a20, a24] = await Promise.all(['Bomb_16', 'aldrich_20_outline', 'aldrich_24_outline'].map(n => loadChain(n, lang)));
-    const [win, upper, lframe, tab, spirits, pov, gbtn, gfr, gfill, fov, unk] = await Promise.all(['dv_window.png', 'dv_upper_bg.png', 'dv_leader_frame.png', 'dv_tab.png',
-      lang === 'zh' ? 'dv_spirits_zh.png' : 'dv_spirits_en.png', 'dv_pie_overlay.png', 'dv_goal_button.png', 'pol_goal_progress_frame.png', 'pol_goal_progress.png', 'dv_flag_overlay.png', 'leader_unknown.png'].map(A));
+    const [b16, a20, a24, win, upper, lframe, tab, spirits, pov, gbtn, gfr, gfill, fov, unk] = await Promise.all([
+      ...['Bomb_16', 'aldrich_20_outline', 'aldrich_24_outline'].map(n => loadChain(n, lang)),
+      ...['dv_window.png', 'dv_upper_bg.png', 'dv_leader_frame.png', 'dv_tab.png',
+        lang === 'zh' ? 'dv_spirits_zh.png' : 'dv_spirits_en.png', 'dv_pie_overlay.png', 'dv_goal_button.png', 'pol_goal_progress_frame.png', 'pol_goal_progress.png', 'dv_flag_overlay.png', 'leader_unknown.png'].map(A)
+    ]);
     const OY = 16;   // canvas y of country_info's origin (the tabs sit 8px above it)
     cv.width = 550; cv.height = OY + (s.spirits ? 384 : 280); ctx.clearRect(0, 0, cv.width, cv.height);
     cornered(ctx, win, 0, 0, 549, cv.height, 64, 64, true);
@@ -1007,8 +1049,11 @@ T.dv = {
        (title hoi_36header, body Ubuntu Bold = hoi_18mbs, option Ubuntu = hoi_20bs). Same text effect as the panels. === */
 async function drawCwnTo(outCv, outCtx, s, lang) {
   const zh = lang === 'zh', H = +s.h || 676;
-  const [zt, zb, zo, et, eb, eo] = await Promise.all(['nu_title', 'zy_28', 'zy_30', 'hoi_36header', 'ub_28', 'um_30'].map(loadFont));
-  const frame = await A('nw_' + H + '.png');
+  const [zt, zb, zo, et, eb, eo, frame] = await Promise.all([
+    loadFont('nu_title'), loadFont('zy_28'), loadFont('zy_30'),
+    zh ? null : loadFont('hoi_36header'), zh ? null : loadFont('ub_28'), zh ? null : loadFont('um_30'),
+    A('nw_' + H + '.png')
+  ]);
   outCv.width = 1162; outCv.height = H * 2; outCtx.clearRect(0, 0, outCv.width, outCv.height);
   // picture window (28, H-192)-(201, H-52) at 1x, under the cut-out
   const px = 56, py = (H - 192) * 2, pw = 346, ph = 280;
@@ -1046,22 +1091,19 @@ T.cwn = {
   draw(s, lang) { return drawCwnTo(cv, ctx, s, lang); }
 };
 
-/* === Cold-war full composite suite: Diplomacy panel (top-left) + scanline box (top-right) +
-       Cold-war news (bottom-left) + Cold-war super event (bottom-right) in one 2x sheet.
+/* === Cold-war full composite suite: Diplomacy panel (top-left) + Cold-war news (bottom-left) +
+       Cold-war super event (bottom-right) in one 2x sheet, matching the reference proportions
+       while drawing both Diplomacy Panel and Super Event at native 1:1 sharpness.
        Reads live state & uploads from dpa / cwn / nu so edits stay synced across tabs. === */
 const cwDpa = document.createElement('canvas'), cwCwn = document.createElement('canvas'), cwNu = document.createElement('canvas');
+const subCache = { dpa: '', cwn: '', nu: '' };
 T.cwall = {
   name: '冷战风整体', en: 'Cold War Suite', scale: 2,
   groups: [
     { title: '整体版式与背景 Layout & Background', fields: [
       { k: 'bg', type: 'select', label: '底色 Background', def: 'black', opts: [['black', '纯黑（同参考图）'], ['trans', '透明（抠图，方便叠地图）']] },
       ...picFields('bgpic', '自定义底图（可选，上传后覆盖背景）'),
-      { k: 'seLabels', type: 'check', label: '超事件底部显示 FILE 4791 / EYES ONLY', def: true },
-      { k: 'showBox', type: 'check', label: '显示右上扫描线框', def: true }
-    ] },
-    { title: '右上扫描线框 Top-right Box', collapsed: true, fields: [
-      { k: 'boxText', type: 'textarea', rows: 2, label: '框内文字（留空 = 纯扫描线框）', zh: '', en: '' },
-      ...picFields('boxpic', '框内图片（可选，覆盖在扫描线下）')
+      { k: 'seLabels', type: 'check', label: '超事件底部显示 FILE 4791 / EYES ONLY', def: true }
     ] },
     { sub: 'dpa', title: '外交面板·冷战风（与对应页签同步）' },
     { sub: 'cwn', title: '冷战风新闻（与对应页签同步）' },
@@ -1070,59 +1112,30 @@ T.cwall = {
   ],
   async draw(s, lang) {
     const [dpaS, cwnS, nuS] = [getState('dpa', lang), getState('cwn', lang), getState('nu', lang)];
-    await drawPanelTo(cwDpa, cwDpa.getContext('2d'), 'a', 'dpa', dpaS, lang);
-    await drawCwnTo(cwCwn, cwCwn.getContext('2d'), cwnS, lang);
-    await drawNuTo(cwNu, cwNu.getContext('2d'), nuS, lang, !!s.seLabels);
-    const W = 2660, newsW = 1022, newsH = Math.round(cwCwn.height * newsW / cwCwn.width);
-    let H = Math.max(1924, 710 + newsH + 25); if (H & 1) H++;
+    const kDpa = lang + '|' + imgRev + '|' + JSON.stringify(dpaS);
+    const kCwn = lang + '|' + imgRev + '|' + JSON.stringify(cwnS);
+    const kNu = lang + '|' + imgRev + '|' + (s.seLabels ? 1 : 0) + '|' + JSON.stringify(nuS);
+    // Load & render only the dirty sub-modules, all in parallel
+    await Promise.all([
+      subCache.dpa === kDpa ? null : drawPanelTo(cwDpa, cwDpa.getContext('2d'), 'a', 'dpa', dpaS, lang).then(() => { subCache.dpa = kDpa; }),
+      subCache.cwn === kCwn ? null : drawCwnTo(cwCwn, cwCwn.getContext('2d'), cwnS, lang).then(() => { subCache.cwn = kCwn; }),
+      subCache.nu === kNu ? null : drawNuTo(cwNu, cwNu.getContext('2d'), nuS, lang, !!s.seLabels).then(() => { subCache.nu = kNu; })
+    ]);
+    // Trim transparent padding of dpA_frame (49px left, 30px top) & nu_frame_cw (13px left, 16px top)
+    // so the visible frames sit tightly at the exact reference proportions while staying 1:1 native sharp.
+    const W = 2512, newsW = 960, newsH = Math.round(cwCwn.height * newsW / cwCwn.width);
+    let H = Math.max(1820, 668 + newsH + 35); if (H & 1) H++;
     cv.width = W; cv.height = H; ctx.clearRect(0, 0, W, H);
     if (s.bg === 'black') { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H); }
     const bgIm = userImg['cwall.bgpic'];
     if (bgIm) drawCover(ctx, bgIm, 0, 0, W, H, pp(s, 'bgpic'));
-    // 1. Top-left: Cold-war Diplomacy panel (native 1320x660)
-    ctx.drawImage(cwDpa, 12, 12);
-    // 2. Top-right: CRT scanline box (542x206 at 1346,26 — matches reference 208x79 at 518,11 x 2.6)
-    if (s.showBox) {
-      const bx = 1346, by = 26, bw = 542, bh = 206;
-      ctx.save();
-      ctx.fillStyle = '#181818';
-      ctx.fillRect(bx, by, bw, bh);
-      const bIm = userImg['cwall.boxpic'];
-      if (bIm) {
-        ctx.save(); ctx.beginPath(); ctx.rect(bx + 2, by + 2, bw - 4, bh - 4); ctx.clip();
-        drawCover(ctx, bIm, bx + 2, by + 2, bw - 4, bh - 4, pp(s, 'boxpic'));
-        ctx.restore();
-      }
-      // horizontal CRT scanlines
-      for (let y = by + 2; y < by + bh - 2; y += 5) {
-        ctx.fillStyle = 'rgba(255,255,255,0.06)'; ctx.fillRect(bx + 2, y, bw - 4, 2);
-        ctx.fillStyle = 'rgba(0,0,0,0.28)'; ctx.fillRect(bx + 2, y + 2, bw - 4, 2);
-      }
-      // subtle inner vignette
-      const vg = ctx.createLinearGradient(bx, by, bx, by + bh);
-      vg.addColorStop(0, 'rgba(0,0,0,0.32)'); vg.addColorStop(0.14, 'rgba(0,0,0,0)');
-      vg.addColorStop(0.86, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.38)');
-      ctx.fillStyle = vg; ctx.fillRect(bx + 2, by + 2, bw - 4, bh - 4);
-      // optional text inside box
-      const bt = String(s.boxText || '').trim();
-      if (bt) {
-        const zh = lang === 'zh';
-        const [zy, ox] = await Promise.all(['zy_30', 'ox_28'].map(loadFont));
-        const chain = zh ? [zy] : [ox, zy], em = chain[0].lh, pitch = 40;
-        const lines = bt.split(/\r?\n/).length;
-        const th = (lines - 1) * pitch + em;
-        fxText(ctx, bt, chain, { cx: bx + bw / 2, y: by + Math.round((bh - th) / 2), w: bw - 36, em, pitch, track: zh ? 1.5 : 0, split: zh ? 0.55 : 0.61, dark: 0.3, align: 'center', glow: 0.2, maxLines: 4 });
-      }
-      // crisp light-grey outer border (matches ref's thin rectangular frame)
-      ctx.strokeStyle = '#8b8b8b'; ctx.lineWidth = 2;
-      ctx.strokeRect(bx + 1, by + 1, bw - 2, bh - 2);
-      ctx.restore();
-    }
-    // 3. Bottom-left: Cold-war News (scaled cleanly to 1022 wide, matching reference proportions)
+    // 1. Top-left: Cold-war Diplomacy panel (native 1320x660, opaque body at x=12..1237, y=12..624)
+    ctx.drawImage(cwDpa, -37, -18);
+    // 2. Bottom-left: Cold-war News (960 wide = 38.2% W, matching reference 38.4%)
     ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(cwCwn, 0, 0, cwCwn.width, cwCwn.height, 148, 710, newsW, newsH);
-    // 4. Bottom-right: Cold-war Super Event (native 1204x908)
-    ctx.drawImage(cwNu, 1404, 534);
+    ctx.drawImage(cwCwn, 0, 0, cwCwn.width, cwCwn.height, 136, 668, newsW, newsH);
+    // 3. Bottom-right: Cold-war Super Event (native 1204x908, opaque body at x=1301..2469 = 46.5% W, 2.6% gap)
+    ctx.drawImage(cwNu, 1285, 478);
   }
 };
 
@@ -1158,21 +1171,106 @@ function setVal(t, f, v) {
   save();
 }
 
+let imgRev = 0;
+const tabSnap = {};
+function tabSig(t, lg) {
+  if (t === 'cwall') return lg + '|' + imgRev + '|' + JSON.stringify([getState('cwall', lg), getState('dpa', lg), getState('cwn', lg), getState('nu', lg)]);
+  if (t === 'sfx') return lg + '|' + imgRev + '|' + JSON.stringify(getState('se', lg));
+  return lg + '|' + imgRev + '|' + JSON.stringify(getState(t, lg));
+}
+function prefetchTab(t, lg) {
+  const zh = lg === 'zh';
+  const safe = list => Promise.all(list.map(p => Promise.resolve(p).catch(() => {})));
+  if (t === 'se' || t === 'sfx') {
+    const s = getState('se', lg);
+    return safe([loadChain('aldrich_24_outline', lg), loadChain('Bomb_24', lg), A('tiled_bg.png'), A('bigevent_border.png'), A('se_underlay.png'), A('button_221x34.png'), userImg['se.pic'] ? null : loadImg(s.preset)]);
+  }
+  if (t === 'nu') {
+    const s = getState('nu', lg);
+    return safe([loadFont('nu_title'), loadFont('nu_button'), A('nu_base.png'), A('nu_glass.png'), A('nu_frame.png'), userImg['nu.pic'] ? null : loadImg(s.preset)]);
+  }
+  if (t === 'dpa') {
+    return safe([loadFont('zy_26'), loadFont('zy_30'), zh ? null : loadFont('ox_24'), zh ? null : loadFont('ox_28'), A('dpA_frame.png'), A('dpA_base.png'), A('dpA_glass.png'), A('leader_unknown.png')]);
+  }
+  if (t === 'dpb') {
+    return safe([loadFont('zy_28'), loadFont('zy_32'), zh ? null : loadFont('ox_26'), zh ? null : loadFont('ox_30'), A('dpB_frame.png'), A('leader_unknown.png')]);
+  }
+  if (t === 'cwn') {
+    const h = +getState('cwn', lg).h || 676;
+    return safe([loadFont('nu_title'), loadFont('zy_28'), loadFont('zy_30'), zh ? null : loadFont('hoi_36header'), zh ? null : loadFont('ub_28'), zh ? null : loadFont('um_30'), A('nw_' + h + '.png')]);
+  }
+  if (t === 'cwall') {
+    return safe([prefetchTab('dpa', lg), prefetchTab('cwn', lg), prefetchTab('nu', lg), A('nu_frame_cw.png')]);
+  }
+  if (t === 'news') {
+    return safe([loadChain('hoi4_typewriter22', lg), loadChain('hoi4_typewriter16', lg), A('news_bg.png'), A('news_pic_overlay.png'), A('option_entry.png'), A('btn_minimize.png')]);
+  }
+  if (t === 'report') {
+    return safe([loadChain('hoi4_typewriter22', lg), loadChain('hoi4_typewriter16', lg), A('report_top.png'), A('report_mid.png'), A('report_bottom.png'), A('pic_clip.png'), A('option_entry.png'), A('btn_minimize.png')]);
+  }
+  if (t === 'dv') {
+    return safe(['Bomb_16', 'aldrich_20_outline', 'aldrich_24_outline'].map(n => loadChain(n, lg)).concat(['dv_window.png', 'dv_upper_bg.png', 'dv_leader_frame.png', 'dv_tab.png'].map(A)));
+  }
+  if (t === 'pol') {
+    return safe(['Bomb_36', 'Bomb_18', 'Bomb_16', 'aldrich_22_outline', 'aldrich_20_outline', 'aldrich_18_outline'].map(n => loadChain(n, lg)).concat(['pol_window.png', 'pol_header.png', 'pol_bg.png'].map(A)));
+  }
+  if (t === 'cs') {
+    return safe(['aldrich_24_outline', 'aldrich_20_outline', 'aldrich_16_outline', 'Bomb_18', 'Bomb_16'].map(n => loadChain(n, lg)).concat(['cs_bg.png', 'cs_cover.png'].map(A)));
+  }
+  if (t === 'ci') {
+    return safe(['aldrich_32_outline', 'aldrich_20_outline', 'aldrich_18_outline', 'Bomb_16'].map(n => loadChain(n, lg)).concat(['ci_bg.png', 'ci_tabs.png'].map(A)));
+  }
+  return Promise.resolve();
+}
+let warmStarted = false;
+function warmCommonTabs() {
+  if (warmStarted) return;
+  warmStarted = true;
+  const queue = ['cwall', 'nu', 'dpa', 'cwn', 'se', 'dpb'].filter(k => k !== cur);
+  const next = () => {
+    const k = queue.shift();
+    if (!k) return;
+    const go = () => prefetchTab(k, lang).then(() => setTimeout(next, 250));
+    if (window.requestIdleCallback) requestIdleCallback(go, { timeout: 1500 });
+    else setTimeout(go, 300);
+  };
+  setTimeout(next, 400);
+}
+
 let renderSeq = 0, pending = null;
-function render() { clearTimeout(pending); pending = setTimeout(doRender, 30); }
+function applyCanvasFit(t, lg) {
+  if (!$('#stage').classList.contains('zoom1')) { cv.style.width = 'auto'; cv.style.height = 'auto'; cv.style.maxWidth = '100%'; cv.style.maxHeight = '78vh'; cv.style.flex = 'none'; cv.style.aspectRatio = cv.width + ' / ' + cv.height; }
+  cv.parentNode.style.alignItems = 'flex-start';
+  const two = T[t].scale === 2;
+  statusEl.textContent = cv.width + ' × ' + cv.height + ' px' + (two ? '（2 倍清晰度，工程原尺寸约 ' + Math.round(cv.width / 2) + ' × ' + Math.round(cv.height / 2) + '）' : '') + ' · ' + (lg === 'zh' ? '中文字体' : 'English fonts');
+  $('#dl2').textContent = two ? '下载 1×（工程原尺寸）' : '下载 2×';
+}
+function render(immediate) {
+  clearTimeout(pending);
+  if (immediate) { pending = null; doRender(); }
+  else pending = setTimeout(doRender, 30);
+}
 async function doRender() {
   const seq = ++renderSeq, t = cur, lg = lang;
+  const sig = tabSig(t, lg), snap = tabSnap[t];
+  if (snap && snap.sig === sig) {
+    cv.width = snap.w; cv.height = snap.h;
+    ctx.clearRect(0, 0, snap.w, snap.h);
+    ctx.drawImage(snap.cv, 0, 0);
+    statusEl.className = 'status';
+    applyCanvasFit(t, lg);
+    return;
+  }
   statusEl.className = 'status'; statusEl.textContent = '正在绘制… Rendering';
-  const off = document.createElement('canvas');
   try {
     await T[t].draw(getState(t, lg), lg);
-    // keep the preview in proportion even if a stale cached page still has the old stylesheet
-    if (!$('#stage').classList.contains('zoom1')) { cv.style.width = 'auto'; cv.style.height = 'auto'; cv.style.maxWidth = '100%'; cv.style.maxHeight = '78vh'; cv.style.flex = 'none'; cv.style.aspectRatio = cv.width + ' / ' + cv.height; }
-    cv.parentNode.style.alignItems = 'flex-start';
-    if (seq !== renderSeq) return render();
-    const two = T[t].scale === 2;
-    statusEl.textContent = cv.width + ' × ' + cv.height + ' px' + (two ? '（2 倍清晰度，工程原尺寸约 ' + Math.round(cv.width / 2) + ' × ' + Math.round(cv.height / 2) + '）' : '') + ' · ' + (lg === 'zh' ? '中文字体' : 'English fonts');
-    $('#dl2').textContent = two ? '下载 1×（工程原尺寸）' : '下载 2×';
+    if (seq !== renderSeq) return render(true);
+    applyCanvasFit(t, lg);
+    const sc = tabSnap[t] ? tabSnap[t].cv : document.createElement('canvas');
+    sc.width = cv.width; sc.height = cv.height;
+    sc.getContext('2d').drawImage(cv, 0, 0);
+    tabSnap[t] = { sig, w: cv.width, h: cv.height, cv: sc };
+    warmCommonTabs();
   } catch (e) {
     console.error(e);
     statusEl.className = 'status err'; statusEl.textContent = '出错了：' + e.message + '（请检查网络后刷新）';
@@ -1188,7 +1286,7 @@ function el(tag, attrs, kids) {
 function readFile(file, key) {
   if (!file) return;
   const url = URL.createObjectURL(file), im = new Image();
-  im.onload = () => { userImg[key] = im; render(); };
+  im.onload = () => { userImg[key] = im; imgRev++; render(true); };
   im.onerror = () => { statusEl.className = 'status err'; statusEl.textContent = '这个文件不是浏览器能打开的图片（DDS/TGA 请先转成 PNG）'; };
   im.src = url;
 }
@@ -1203,7 +1301,7 @@ function addFields(fs, tab, s, fields) {
     } else if (f.type === 'select') {
       const sel = el('select', { id }, f.opts.map(o => el('option', { value: o[0], text: o[1] })));
       sel.value = s[f.k];
-      sel.addEventListener('change', () => { setVal(tab, f, sel.value); render(); });
+      sel.addEventListener('change', () => { setVal(tab, f, sel.value); render(true); });
       fs.appendChild(el('label', { className: 'f' }, [lab, sel]));
     } else if (f.type === 'range') {
       const inp = el('input', { type: 'range', id, min: f.min, max: f.max, step: f.step });
@@ -1212,14 +1310,14 @@ function addFields(fs, tab, s, fields) {
       fs.appendChild(el('label', { className: 'f' }, [lab, inp]));
     } else if (f.type === 'check') {
       const inp = el('input', { type: 'checkbox', id, checked: !!s[f.k] });
-      inp.addEventListener('change', () => { setVal(tab, f, inp.checked); render(); });
+      inp.addEventListener('change', () => { setVal(tab, f, inp.checked); render(true); });
       fs.appendChild(el('label', { className: 'chk' }, [inp, el('span', { text: f.label })]));
     } else if (f.type === 'image') {
       const key = tab + '.' + f.k;
       const inp = el('input', { type: 'file', id, accept: 'image/*' });
       inp.addEventListener('change', () => readFile(inp.files[0], key));
       const clr = el('button', { type: 'button', className: 'btn', text: '清除 Clear' });
-      clr.addEventListener('click', () => { userImg[key] = null; inp.value = ''; render(); });
+      clr.addEventListener('click', () => { userImg[key] = null; imgRev++; inp.value = ''; render(true); });
       fs.appendChild(el('label', { className: 'f' }, [lab, el('div', { className: 'row' }, [inp, clr])]));
     } else if (f.type === 'images') {
       const key = tab + '.' + f.k;
@@ -1230,10 +1328,10 @@ function addFields(fs, tab, s, fields) {
           const im = new Image(); im.src = URL.createObjectURL(file);
           try { await new Promise((r, j) => { im.onload = r; im.onerror = j; }); list.push(im); } catch (e) {}
         }
-        userImg[key] = list; render();
+        userImg[key] = list; imgRev++; render(true);
       });
       const clr = el('button', { type: 'button', className: 'btn', text: '清除 Clear' });
-      clr.addEventListener('click', () => { userImg[key] = null; inp.value = ''; render(); });
+      clr.addEventListener('click', () => { userImg[key] = null; imgRev++; inp.value = ''; render(true); });
       fs.appendChild(el('label', { className: 'f' }, [lab, el('div', { className: 'row' }, [inp, clr])]));
     } else if (f.type === 'audio') {
       fs.appendChild(buildAudioUI());
@@ -1242,13 +1340,13 @@ function addFields(fs, tab, s, fields) {
     } else if (f.type === 'thumbs') {
       const box = el('div', { className: 'thumbs' });
       f.list().forEach(src => {
-        const b = el('button', { type: 'button', className: f.wide ? 'wide' : '', title: src.split('/').pop().replace('.png', '') }, [el('img', { src, loading: 'lazy', alt: '' })]);
+        const b = el('button', { type: 'button', className: f.wide ? 'wide' : '', title: src.split('/').pop().replace('.png', '') }, [el('img', { src, loading: 'lazy', decoding: 'async', alt: '' })]);
         b.addEventListener('click', () => {
           setVal(tab, f, src);
-          if (tab === 'se') userImg['se.pic'] = null;
-          if (tab === 'nu') userImg['nu.pic'] = null;
-          if (tab === 'news') userImg['news.hdr'] = null;
-          render();
+          if (tab === 'se') { userImg['se.pic'] = null; imgRev++; }
+          if (tab === 'nu') { userImg['nu.pic'] = null; imgRev++; }
+          if (tab === 'news') { userImg['news.hdr'] = null; imgRev++; }
+          render(true);
         });
         box.appendChild(b);
       });
@@ -1263,20 +1361,30 @@ function buildForm() {
     if (g.sub) {
       const det = el('details', { className: 'submod' }, [el('summary', { text: g.title })]);
       const body = el('div', { className: 'subbody' });
-      const subS = getState(g.sub, lang);
-      for (const sg of T[g.sub].groups) {
-        const flds = (sg.fields || []).filter(f => f.type !== 'audio' && f.type !== 'sfxlib');
-        if (!flds.length) continue;
-        const fs = el('fieldset', {}, [el('legend', { text: sg.title })]);
-        addFields(fs, g.sub, subS, flds);
-        body.appendChild(fs);
-      }
+      let built = false;
+      det.addEventListener('toggle', () => {
+        if (!det.open || built) return;
+        built = true;
+        const subS = getState(g.sub, lang);
+        for (const sg of T[g.sub].groups) {
+          const flds = (sg.fields || []).filter(f => f.type !== 'audio' && f.type !== 'sfxlib');
+          if (!flds.length) continue;
+          const fs = el('fieldset', {}, [el('legend', { text: sg.title })]);
+          addFields(fs, g.sub, subS, flds);
+          body.appendChild(fs);
+        }
+      });
       det.appendChild(body);
       form.appendChild(det);
     } else if (g.collapsed) {
       const det = el('details', { className: 'submod' }, [el('summary', { text: g.title })]);
       const body = el('div', { className: 'subbody' });
-      addFields(body, cur, s, g.fields || []);
+      let built = false;
+      det.addEventListener('toggle', () => {
+        if (!det.open || built) return;
+        built = true;
+        addFields(body, cur, getState(cur, lang), g.fields || []);
+      });
       det.appendChild(body);
       form.appendChild(det);
     } else {
@@ -1538,19 +1646,32 @@ function buildAudioUI() {
   return box;
 }
 
+const tabBtns = {};
+function updateTabs() {
+  for (const k in tabBtns) tabBtns[k].setAttribute('aria-selected', k === cur ? 'true' : 'false');
+}
 function buildTabs() {
   const nav = $('#tabs'); nav.textContent = '';
   ORDER.forEach(k => {
     const b = el('button', { type: 'button', role: 'tab' }, [document.createTextNode(T[k].name), el('span', { text: T[k].en })]);
     b.setAttribute('aria-selected', k === cur ? 'true' : 'false');
-    b.addEventListener('click', () => { cur = k; save(); try { history.replaceState(null, '', '#' + k); } catch (e) {} buildTabs(); buildForm(); render(); });
+    b.addEventListener('pointerenter', () => prefetchTab(k, lang));
+    b.addEventListener('focus', () => prefetchTab(k, lang));
+    b.addEventListener('click', () => {
+      if (cur === k) return;
+      cur = k; save(); try { history.replaceState(null, '', '#' + k); } catch (e) {}
+      updateTabs();
+      render(true);
+      buildForm();
+    });
+    tabBtns[k] = b;
     nav.appendChild(b);
   });
 }
 function setLang(l) {
   lang = l; save();
   $('#lang-zh').setAttribute('aria-pressed', l === 'zh'); $('#lang-en').setAttribute('aria-pressed', l === 'en');
-  buildForm(); render();
+  render(true); buildForm();
 }
 $('#lang-zh').addEventListener('click', () => setLang('zh'));
 $('#lang-en').addEventListener('click', () => setLang('en'));
@@ -1599,10 +1720,11 @@ $('#zoom').addEventListener('click', () => { const on = $('#stage').classList.to
 $('#reset').addEventListener('click', () => {
   delete store[cur]; save();
   Object.keys(userImg).forEach(k => { if (k.startsWith(cur + '.')) userImg[k] = null; });
-  buildForm(); render();
+  imgRev++;
+  buildForm(); render(true);
 });
 
 $('#lang-zh').setAttribute('aria-pressed', lang === 'zh'); $('#lang-en').setAttribute('aria-pressed', lang === 'en');
-buildTabs(); buildForm(); render();
-window.__tno = { T, render, userImg, getState: () => getState(cur, lang) };
+buildTabs(); buildForm(); render(true);
+window.__tno = { T, render, userImg, getState: () => getState(cur, lang), prefetchTab };
 })();
