@@ -72,17 +72,19 @@ input[type=file]{font-size:12px;color:var(--dim);max-width:100%}
 .pie-ed{display:flex;flex-direction:column;gap:8px}
 .pie-bar{display:flex;height:10px;border-radius:3px;overflow:hidden;border:1px solid var(--line2);background:#061011}
 .pie-bar span{height:100%;transition:width .06s}
-.pie-pal{display:flex;flex-wrap:wrap;gap:4px}
-.pie-pal button{display:inline-flex;align-items:center;gap:4px;font:11px var(--sans);color:var(--fg);background:#061011;border:1px solid var(--line);border-radius:3px;padding:3px 6px;cursor:pointer;line-height:1.2}
-.pie-pal button:hover{border-color:var(--crt2)}
-.pie-pal button.on{border-color:var(--crt);background:var(--panel2)}
-.pie-pal i{width:9px;height:9px;border-radius:2px;display:inline-block;border:1px solid rgba(255,255,255,.28);flex:none}
+.pie-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:5px}
+.pie-cell{display:flex;align-items:center;gap:5px;background:#061011;border:1px solid var(--line);border-radius:3px;padding:4px 6px;min-width:0}
+.pie-cell.on{border-color:var(--crt);background:var(--panel2)}
+.pie-cell i{width:11px;height:11px;border-radius:2px;display:inline-block;border:1px solid rgba(255,255,255,.32);flex:none}
+.pie-cell span{flex:1;min-width:0;font-size:12px;color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pie-cell input[type=number]{width:44px;flex:none;padding:2px 4px;font:12px var(--mono);text-align:right;background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:2px}
+.pie-cell.on input[type=number]{border-color:var(--crt);color:var(--crt2)}
 .pie-rows{display:flex;flex-direction:column;gap:5px}
-.pie-row{display:grid;grid-template-columns:24px minmax(64px,92px) minmax(0,1fr) 44px 24px;gap:5px;align-items:center;background:#061011;border:1px solid var(--line);border-radius:3px;padding:4px 6px}
+.pie-row{display:grid;grid-template-columns:24px minmax(0,1fr) 48px 24px;gap:5px;align-items:center;background:#061011;border:1px solid var(--line);border-radius:3px;padding:4px 6px}
 .pie-row input[type=color]{width:22px;height:22px;padding:0;border:1px solid var(--line2);border-radius:2px;background:none;cursor:pointer}
 .pie-row input[type=text]{padding:3px 5px;font-size:12px;border-color:transparent;background:transparent}
 .pie-row input[type=text]:focus{border-color:var(--line2);background:var(--panel)}
-.pie-row input[type=number]{width:44px;padding:2px 3px;font:12px var(--mono);text-align:right;background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:2px}
+.pie-row input[type=number]{width:48px;padding:2px 4px;font:12px var(--mono);text-align:right;background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:2px}
 .pie-row .pie-del{background:transparent;border:0;color:var(--dim);cursor:pointer;font-size:15px;line-height:1;padding:2px}
 .pie-row .pie-del:hover{color:var(--warn)}
 .pie-tools{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;color:var(--dim)}
@@ -149,6 +151,6 @@ footer{margin-top:28px;padding-top:12px;border-top:1px solid var(--line);font-si
 <script src="assets/manifest.js"></script>
 <script src="fonts/chains.js"></script>
 <script src="sfx/manifest.js"></script>
-<script src="app.js?v=24"></script>
+<script src="app.js?v=25"></script>
 </body>
 </html>

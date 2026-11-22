@@ -435,8 +435,30 @@ function findIdeoByHex(hex) {
   hex = normHex(hex);
   return TNO_IDEOS.find(d => d.c === hex || d.alt.includes(hex)) || null;
 }
+function findIdeoByText(txt) {
+  const s = String(txt || '').trim().toLowerCase();
+  if (!s) return null;
+  const aliases = [
+    ['liberal_conservatism', ['自由保守主义', '自由保守', '自保', 'liberal conservatism', 'liberal_conservatism']],
+    ['national_socialism', ['民族社会主义', '民社', '纳粹', 'national socialism', 'national_socialism', 'natsoc']],
+    ['ultranationalism', ['极端民族主义', '极民', 'ultranationalism', 'ultranat']],
+    ['esoteric_nazism', ['秘传纳粹', '秘传', '勃艮第', 'esoteric nazism', 'esoteric_nazism', 'burgundian']],
+    ['fascism', ['法西斯主义', '法西斯', 'fascism']],
+    ['despotism', ['专制主义', '专制', 'despotism']],
+    ['paternalism', ['家长制', '威权民主', 'paternalism', 'authdem']],
+    ['conservatism', ['保守主义', '保守', 'conservatism']],
+    ['liberalism', ['自由主义', '自由', 'liberalism']],
+    ['progressivism', ['进步主义', '进步', '社民', '社会民主', 'progressivism', 'socdem']],
+    ['socialist', ['社会主义', '社主', 'socialism', 'socialist']],
+    ['communist', ['共产主义', '共产', 'communism', 'communist']]
+  ];
+  for (const [id, keys] of aliases) {
+    if (keys.some(k => s.includes(k))) return TNO_IDEOS.find(d => d.id === id);
+  }
+  return null;
+}
 function ideoOrder(item) {
-  const hit = findIdeoByHex(item.c) || TNO_IDEOS.find(d => item.name && (item.name === d.zh || item.name === d.en || item.name === d.s));
+  const hit = findIdeoByHex(item.c) || findIdeoByText(item.name);
   return hit ? TNO_IDEOS.indexOf(hit) : 999;
 }
 function parsePie(txt) {
@@ -444,8 +466,9 @@ function parsePie(txt) {
   String(txt || '').split('\n').forEach(line => {
     const m = line.match(/(-?\d+(?:\.\d+)?)/), c = line.match(/#[0-9a-fA-F]{3,8}\b/);
     if (m && +m[1] > 0) {
-      const hex = normHex(c ? c[0] : '#888888');
-      let name = line.replace(m[0], '').replace(c ? c[0] : '', '').trim();
+      let name = line.replace(m[0], '').replace(c ? c[0] : '', '').replace(/[%％]/g, '').trim();
+      const byName = findIdeoByText(name);
+      const hex = c ? normHex(c[0]) : (byName ? byName.c : '#888888');
       if (!name) { const hit = findIdeoByHex(hex); if (hit) name = hit.zh; }
       out.push({ v: +m[1], c: hex, name });
     }
@@ -471,8 +494,8 @@ T.pol = {
       { k: 'faction', type: 'image', label: '阵营图标 Faction icon（可选）' },
       { k: 'flag', type: 'image', label: '国旗 Flag（可选，显示在标题栏左侧）' }
     ] },
-    { title: '饼图 Pie chart（TNO 官方色板 · 拖动自动配平）', fields: [
-      { k: 'pie', type: 'pie', label: '点选 TNO 意识形态增减，拖动滑块自动调比例',
+    { title: '饼图 Pie chart（输入各主义占比）', fields: [
+      { k: 'pie', type: 'pie', label: '填入各意识形态占比数字（0 = 不显示，自动按 TNO 官方色绘制）',
         zh: '5 #5a2d23 法西斯主义\n7 #6f6f6f 家长制\n9 #1a1a65 保守主义\n38 #2f367f 自由保守主义\n27 #586593 自由主义\n14 #9a2b4d 进步主义',
         en: '5 #5a2d23 Fascism\n7 #6f6f6f Paternalism\n9 #1a1a65 Conservatism\n38 #2f367f Liberal Conservatism\n27 #586593 Liberalism\n14 #9a2b4d Progressivism' }
     ] },
@@ -929,7 +952,7 @@ function dpGroups(kind) {
       ...picFields('portrait', '领袖头像 Portrait'),
       { k: 'flag', type: 'image', label: '国旗 Flag' },
       { k: 'samples', type: 'check', label: '没上传头像时显示剪影', def: true },
-      { k: 'pie', type: 'pie', label: '饼图 Pie chart（TNO 官方色板 · 自动配平）',
+      { k: 'pie', type: 'pie', label: '饼图：直接输入各主义占比（0 = 不显示）',
         zh: '14 #32211e 民族社会主义\n22 #191919 极端民族主义\n22 #414141 专制主义\n20 #6f6f6f 家长制\n14 #1a1a65 保守主义\n8 #7b2121 社会主义',
         en: '14 #32211e National Socialism\n22 #191919 Ultranationalism\n22 #414141 Despotism\n20 #6f6f6f Paternalism\n14 #1a1a65 Conservatism\n8 #7b2121 Socialism' }
     ] }
@@ -1012,7 +1035,7 @@ T.dv = {
       { k: 'party', type: 'text', label: '执政党 Ruling party', zh: '全俄军官联盟 - 军官系', en: 'All-Russian Officers\' Union - Officers' },
       { k: 'ideology', type: 'text', label: '意识形态 Ideology', zh: '贵族保守主义', en: 'Aristocratic Conservatism' },
       { k: 'elections', type: 'text', label: '选举 Elections', zh: '无选举', en: 'No Elections' },
-      { k: 'pie', type: 'pie', label: '饼图 Pie chart（TNO 官方色板，3 点钟顺时针）',
+      { k: 'pie', type: 'pie', label: '饼图：直接输入各主义占比（0 = 不显示，3 点钟顺时针）',
         zh: '55 #414141 专制主义\n33 #6f6f6f 家长制\n12 #1a1a65 保守主义',
         en: '55 #414141 Despotism\n33 #6f6f6f Paternalism\n12 #1a1a65 Conservatism' }
     ] },
@@ -1367,184 +1390,159 @@ function normalizePie100(rows) {
   });
 }
 function buildPieUI(tab, f, initVal) {
-  let rows = parsePie(initVal);
-  if (!rows.length) rows = [{ v: 100, c: '#414141', name: lang === 'zh' ? '专制主义' : 'Despotism' }];
-  let autoBal = true, showRaw = false;
+  // Split parsed entries into: official TNO ideology map (id -> value) + any custom non-TNO slices
+  const vals = {};
+  let custom = [];
+  function loadFromText(txt) {
+    TNO_IDEOS.forEach(d => { vals[d.id] = 0; });
+    custom = [];
+    parsePie(txt).forEach(r => {
+      const hit = findIdeoByHex(r.c) || findIdeoByText(r.name);
+      if (hit) vals[hit.id] = (vals[hit.id] || 0) + r.v;
+      else custom.push({ v: r.v, c: r.c, name: r.name || '' });
+    });
+  }
+  loadFromText(initVal);
 
+  let showRaw = false;
   const wrap = el('div', { className: 'pie-ed' });
   const bar = el('div', { className: 'pie-bar' });
-  const pal = el('div', { className: 'pie-pal' });
-  const list = el('div', { className: 'pie-rows' });
+  const grid = el('div', { className: 'pie-grid' });
+  const custBox = el('div', { className: 'pie-rows' });
   const tools = el('div', { className: 'pie-tools' });
-  const raw = el('textarea', { rows: 4, value: formatPie(rows) });
+  const raw = el('textarea', { rows: 5, placeholder: '也可以直接每行输入，如：\n民族社会主义 40\n专制主义 35\n家长制 25' });
   raw.hidden = true;
-
   const totEl = el('span', { className: 'pie-tot' });
-  const rowRefs = [];
+  const cellRefs = {};
 
-  function syncBarAndTotal() {
-    bar.textContent = '';
-    const tot = rows.reduce((a, r) => a + Math.max(0, r.v), 0) || 1;
-    rows.forEach(r => {
-      if (r.v <= 0) return;
-      const seg = el('span');
-      seg.style.width = (r.v / tot * 100).toFixed(2) + '%';
-      seg.style.background = normHex(r.c);
-      seg.title = (r.name || r.c) + ' ' + r.v + '%';
-      bar.appendChild(seg);
+  function activeRows() {
+    const out = [];
+    TNO_IDEOS.forEach(d => {
+      const v = +vals[d.id] || 0;
+      if (v > 0) out.push({ v, c: d.c, name: lang === 'zh' ? d.zh : d.en });
     });
-    const sum = Math.round(rows.reduce((a, r) => a + Math.max(0, r.v), 0) * 10) / 10;
-    totEl.textContent = '合计 ' + sum + '%';
-    totEl.style.color = Math.abs(sum - 100) < 0.5 ? 'var(--crt)' : 'var(--warn)';
+    custom.forEach(r => {
+      const v = +r.v || 0;
+      if (v > 0) out.push({ v, c: normHex(r.c), name: r.name });
+    });
+    return out;
   }
 
-  function syncPaletteState() {
-    const activeSet = new Set(rows.map(r => {
-      const h = findIdeoByHex(r.c);
-      return h ? h.id : '';
-    }));
-    Array.from(pal.children).forEach(btn => {
-      btn.classList.toggle('on', activeSet.has(btn.dataset.id));
+  function syncBarAndCells() {
+    TNO_IDEOS.forEach(d => {
+      const ref = cellRefs[d.id];
+      if (!ref) return;
+      const v = +vals[d.id] || 0;
+      ref.cell.classList.toggle('on', v > 0);
+      if (document.activeElement !== ref.inp) ref.inp.value = v ? String(Math.round(v * 10) / 10) : '0';
     });
+    const rows = activeRows();
+    const tot = rows.reduce((a, r) => a + r.v, 0);
+    bar.textContent = '';
+    if (tot > 0) {
+      rows.forEach(r => {
+        const seg = el('span');
+        seg.style.width = (r.v / tot * 100).toFixed(2) + '%';
+        seg.style.background = r.c;
+        seg.title = (r.name || r.c) + ' ' + r.v + '%';
+        bar.appendChild(seg);
+      });
+    }
+    const sum = Math.round(tot * 10) / 10;
+    totEl.textContent = '合计 ' + sum + '%' + (sum > 0 && Math.abs(sum - 100) >= 0.5 ? '（自动按比例）' : '');
+    totEl.style.color = Math.abs(sum - 100) < 0.5 ? 'var(--crt)' : 'var(--dim)';
   }
 
   function commit(immediate) {
-    const txt = formatPie(rows);
-    raw.value = txt;
-    syncBarAndTotal();
-    syncPaletteState();
+    const txt = formatPie(activeRows());
+    if (document.activeElement !== raw) raw.value = txt;
+    syncBarAndCells();
     setVal(tab, f, txt);
     render(immediate);
   }
 
-  function rebuildRows() {
-    list.textContent = '';
-    rowRefs.length = 0;
-    rows.forEach((r, idx) => {
-      const col = el('input', { type: 'color', value: normHex(r.c), title: '选择颜色' });
-      const nm = el('input', { type: 'text', value: r.name || '', placeholder: '意识形态' });
-      const rng = el('input', { type: 'range', min: 0, max: 100, step: 1 });
-      rng.value = Math.round(r.v);
-      const num = el('input', { type: 'number', min: 0, max: 100, step: 1 });
-      num.value = Math.round(r.v);
-      const del = el('button', { type: 'button', className: 'pie-del', text: '×', title: '删除此色块' });
-
-      const onVal = (val, immediate) => {
-        const nv = Math.max(0, Math.min(100, +val || 0));
-        if (autoBal) {
-          rebalancePie(rows, idx, nv);
-          rowRefs.forEach((ref, j) => {
-            ref.rng.value = Math.round(rows[j].v);
-            ref.num.value = Math.round(rows[j].v);
-          });
-        } else {
-          rows[idx].v = nv;
-          rng.value = nv;
-          num.value = nv;
-        }
-        commit(immediate);
-      };
-      rng.addEventListener('input', () => onVal(rng.value, false));
-      num.addEventListener('input', () => onVal(num.value, false));
-      col.addEventListener('input', () => {
-        rows[idx].c = normHex(col.value);
-        const hit = findIdeoByHex(rows[idx].c);
-        if (hit && !rows[idx].name) { rows[idx].name = lang === 'zh' ? hit.zh : hit.en; nm.value = rows[idx].name; }
-        commit(false);
-      });
-      nm.addEventListener('input', () => { rows[idx].name = nm.value; commit(false); });
-      del.addEventListener('click', () => {
-        if (rows.length <= 1) return;
-        rows.splice(idx, 1);
-        if (autoBal) normalizePie100(rows);
-        rebuildRows();
-        commit(true);
-      });
-
-      const rowEl = el('div', { className: 'pie-row' }, [col, nm, rng, num, del]);
-      rowRefs.push({ rng, num, col, nm });
-      list.appendChild(rowEl);
+  function rebuildCustom() {
+    custBox.textContent = '';
+    custom.forEach((r, idx) => {
+      const col = el('input', { type: 'color', value: normHex(r.c), title: '选择自定义颜色' });
+      const nm = el('input', { type: 'text', value: r.name || '', placeholder: '自定义颜色' });
+      const num = el('input', { type: 'number', min: 0, max: 999, step: 1 });
+      num.value = Math.round(r.v * 10) / 10;
+      const del = el('button', { type: 'button', className: 'pie-del', text: '×', title: '删除' });
+      col.addEventListener('input', () => { r.c = normHex(col.value); commit(false); });
+      nm.addEventListener('input', () => { r.name = nm.value; commit(false); });
+      num.addEventListener('input', () => { r.v = Math.max(0, +num.value || 0); commit(false); });
+      del.addEventListener('click', () => { custom.splice(idx, 1); rebuildCustom(); commit(true); });
+      custBox.appendChild(el('div', { className: 'pie-row' }, [col, nm, num, del]));
     });
-    syncBarAndTotal();
-    syncPaletteState();
   }
 
-  // Official TNO ideology quick-toggle palette
+  // Fixed 2-column grid of all 12 official TNO ideologies — just type the number for each!
   TNO_IDEOS.forEach(d => {
     const dot = el('i'); dot.style.background = d.c;
-    const label = lang === 'zh' ? d.s : d.en;
-    const b = el('button', { type: 'button', title: (lang === 'zh' ? d.zh + ' · ' + d.en : d.en + ' · ' + d.zh) + ' (' + d.c + ')' }, [dot, document.createTextNode(label)]);
-    b.dataset.id = d.id;
-    b.addEventListener('click', () => {
-      const exIdx = rows.findIndex(r => { const h = findIdeoByHex(r.c); return h && h.id === d.id; });
-      if (exIdx >= 0) {
-        if (rows.length <= 1) return;
-        rows.splice(exIdx, 1);
-        if (autoBal) normalizePie100(rows);
-      } else {
-        const initShare = rows.length ? Math.max(10, Math.round(100 / (rows.length + 1))) : 100;
-        const item = { v: initShare, c: d.c, name: lang === 'zh' ? d.zh : d.en };
-        rows.push(item);
-        rows.sort((a, b2) => ideoOrder(a) - ideoOrder(b2));
-        if (autoBal) {
-          const newIdx = rows.indexOf(item);
-          rebalancePie(rows, newIdx, initShare);
-        }
-      }
-      rebuildRows();
-      commit(true);
+    const nm = el('span', { text: lang === 'zh' ? d.zh : d.en, title: (lang === 'zh' ? d.zh + ' · ' + d.en : d.en + ' · ' + d.zh) + ' (' + d.c + ')' });
+    const inp = el('input', { type: 'number', min: 0, max: 999, step: 1, inputmode: 'decimal' });
+    inp.value = vals[d.id] ? String(Math.round(vals[d.id] * 10) / 10) : '0';
+    inp.addEventListener('focus', () => inp.select());
+    inp.addEventListener('input', () => {
+      vals[d.id] = Math.max(0, +inp.value || 0);
+      commit(false);
     });
-    pal.appendChild(b);
+    const cell = el('label', { className: 'pie-cell' + (vals[d.id] > 0 ? ' on' : '') }, [dot, nm, inp]);
+    cellRefs[d.id] = { cell, inp };
+    grid.appendChild(cell);
   });
 
-  // Tools bar
-  const balChk = el('input', { type: 'checkbox', checked: true });
-  balChk.addEventListener('change', () => {
-    autoBal = balChk.checked;
-    if (autoBal) { normalizePie100(rows); rebuildRows(); commit(true); }
+  // Action buttons
+  const btnNorm = el('button', { type: 'button', className: 'btn', text: '归一 100%' });
+  btnNorm.addEventListener('click', () => {
+    const keys = TNO_IDEOS.map(d => d.id).filter(id => (+vals[id] || 0) > 0);
+    const all = keys.map(id => ({ type: 'ideo', id, v: +vals[id] })).concat(custom.filter(r => (+r.v || 0) > 0).map(r => ({ type: 'cust', r, v: +r.v })));
+    if (!all.length) return;
+    normalizePie100(all);
+    all.forEach(x => { if (x.type === 'ideo') vals[x.id] = x.v; else x.r.v = x.v; });
+    rebuildCustom();
+    commit(true);
   });
-  const btnSort = el('button', { type: 'button', className: 'btn', text: '按 TNO 顺序' });
-  btnSort.addEventListener('click', () => {
-    rows.sort((a, b2) => ideoOrder(a) - ideoOrder(b2));
-    rebuildRows(); commit(true);
+  const btnClr = el('button', { type: 'button', className: 'btn', text: '全部清零' });
+  btnClr.addEventListener('click', () => {
+    TNO_IDEOS.forEach(d => { vals[d.id] = 0; });
+    custom = [];
+    rebuildCustom();
+    commit(true);
   });
-  const btnEq = el('button', { type: 'button', className: 'btn', text: '均分' });
-  btnEq.addEventListener('click', () => {
-    const n = rows.length, base = Math.floor(100 / n), extra = 100 - base * n;
-    rows.forEach((r, i) => { r.v = base + (i < extra ? 1 : 0); });
-    rebuildRows(); commit(true);
-  });
-  const btnAdd = el('button', { type: 'button', className: 'btn', text: '+ 自定义' });
+  const btnAdd = el('button', { type: 'button', className: 'btn', text: '+ 自定义色' });
   btnAdd.addEventListener('click', () => {
-    const item = { v: 15, c: '#59c7c2', name: lang === 'zh' ? '自定义' : 'Custom' };
-    rows.push(item);
-    if (autoBal) rebalancePie(rows, rows.length - 1, 15);
-    rebuildRows(); commit(true);
+    custom.push({ v: 10, c: '#59c7c2', name: lang === 'zh' ? '自定义' : 'Custom' });
+    rebuildCustom();
+    commit(true);
   });
-  const btnRaw = el('button', { type: 'button', className: 'btn', text: '文本' });
+  const btnRaw = el('button', { type: 'button', className: 'btn', text: '文本输入' });
   btnRaw.addEventListener('click', () => {
     showRaw = !showRaw;
     raw.hidden = !showRaw;
-    btnRaw.textContent = showRaw ? '收起文本' : '文本';
+    btnRaw.textContent = showRaw ? '收起文本' : '文本输入';
   });
   raw.addEventListener('input', () => {
-    const parsed = parsePie(raw.value);
-    if (parsed.length) { rows = parsed; rebuildRows(); }
+    loadFromText(raw.value);
+    rebuildCustom();
+    syncBarAndCells();
     setVal(tab, f, raw.value);
     render();
   });
 
-  tools.appendChild(el('label', { className: 'chk' }, [balChk, el('span', { text: '自动配平 100%' })]));
-  tools.appendChild(btnSort);
-  tools.appendChild(btnEq);
+  tools.appendChild(btnNorm);
+  tools.appendChild(btnClr);
   tools.appendChild(btnAdd);
   tools.appendChild(btnRaw);
   tools.appendChild(totEl);
 
-  rebuildRows();
+  raw.value = formatPie(activeRows());
+  rebuildCustom();
+  syncBarAndCells();
   wrap.appendChild(bar);
-  wrap.appendChild(pal);
-  wrap.appendChild(list);
+  wrap.appendChild(grid);
+  wrap.appendChild(custBox);
   wrap.appendChild(tools);
   wrap.appendChild(raw);
   return wrap;
