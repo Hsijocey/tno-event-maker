@@ -112,8 +112,12 @@ footer{margin-top:28px;padding-top:12px;border-top:1px solid var(--line);font-si
 </head>
 <body>
 <header>
-  <h1>TNO 事件制作器<small>THE NEW ORDER · EVENT MAKER</small></h1>
+  <h1>TNO / TFR 事件制作器<small>THE NEW ORDER &amp; THE FIRE RISES · EVENT MAKER</small></h1>
   <div class="spacer"></div>
+  <div class="seg" role="group" aria-label="模组 Mod">
+    <button type="button" id="mod-tno" aria-pressed="true">TNO 新秩序</button>
+    <button type="button" id="mod-tfr" aria-pressed="false">TFR 烈焰升腾</button>
+  </div>
   <div class="seg" role="group" aria-label="游戏语言 Game language">
     <button type="button" id="lang-zh" aria-pressed="true">中文（汉化版）</button>
     <button type="button" id="lang-en" aria-pressed="false">English (original)</button>
@@ -136,7 +140,7 @@ footer{margin-top:28px;padding-top:12px;border-top:1px solid var(--line);font-si
   <form id="form" autocomplete="off" onsubmit="return false"></form>
 </main>
 <footer>
-  界面贴图、位图字体与坐标取自《The New Order: Last Days of Europe》及其汉化 mod 的游戏文件，版权归各自作者所有；本页为非官方同人工具，图片只在你的浏览器里合成，不会上传。<br>
+  界面贴图、位图字体与坐标取自《The New Order: Last Days of Europe》与《The Fire Rises（烈焰升腾）》及其官方/汉化文件，版权归各自作者所有；本页为非官方同人工具，图片只在你的浏览器里合成，不会上传。<br>
   文字里可以用游戏的颜色代码：<code>§Y黄色§!</code>、<code>§R红§!</code>、<code>§G绿§!</code>、<code>§W白§!</code>；换行直接回车或写 <code>\n</code>。
 </footer>
 <div id="out" hidden>
@@ -148,9 +152,9 @@ footer{margin-top:28px;padding-top:12px;border-top:1px solid var(--line);font-si
   </div>
   <span class="hint" id="outhint" style="text-align:center">点「保存到相册」，或长按图片保存。微信/QQ 里打不开时，请先用「在浏览器中打开」再操作。</span>
 </div>
-<script src="assets/manifest.js"></script>
-<script src="fonts/chains.js"></script>
+<script src="assets/manifest.js?v=2"></script>
+<script src="fonts/chains.js?v=2"></script>
 <script src="sfx/manifest.js"></script>
-<script src="app.js?v=25"></script>
+<script src="app.js?v=26"></script>
 </body>
 </html>

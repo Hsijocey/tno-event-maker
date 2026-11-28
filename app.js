@@ -17,8 +17,9 @@ function loadImg(src) {
   });
   return imgCache[src];
 }
-const ASSET_VER = '9';   // bump when a texture in assets/ is regenerated
+const ASSET_VER = '10';   // bump when a texture in assets/ is regenerated
 const A = n => loadImg('assets/' + n + '?v=' + ASSET_VER);
+const TF = n => loadImg('assets/tfr/' + n + '?v=' + ASSET_VER);
 
 /* ---------- bitmap fonts ---------- */
 const fontCache = {}, FONT_VER = '6';   // bump when an atlas is rebuilt so browsers do not keep the old one
@@ -64,7 +65,7 @@ const STYLE = {
   bomb: { def: [255, 255, 255], cols: COL_BOMB },
   tw: { def: [0, 0, 0], cols: COL_TW }
 };
-const styleOf = slot => slot.startsWith('aldrich') ? STYLE.ald : slot.startsWith('Bomb') ? STYLE.bomb : STYLE.tw;
+const styleOf = slot => slot.startsWith('aldrich') ? STYLE.ald : (slot.startsWith('Bomb') || slot.startsWith('tfr_')) ? STYLE.bomb : STYLE.tw;
 
 const isCJK = c => (c >= 0x2E80 && c <= 0x9FFF) || (c >= 0xF900 && c <= 0xFAFF) || (c >= 0xFF00 && c <= 0xFFEF) || (c >= 0x3000 && c <= 0x303F);
 
@@ -426,18 +427,53 @@ const TNO_IDEOS = [
   { id: 'communist',            zh: '共产主义',     s: '共产',   en: 'Communism',            c: '#5a1919', alt: ['#460f0f', '#501414', '#642323', '#6e2d2d'] },
   { id: 'esoteric_nazism',      zh: '秘传纳粹',     s: '秘传',   en: 'Esoteric Nazism',      c: '#34164a', alt: ['#491d58'] }
 ];
+/* === Official TFR ideology pie chart palette & order (from TFR 3350890356 common/ideologies/TFR_ideologies.txt) === */
+const TFR_IDEOS = [
+  { id: 'totalitarian_socialist', zh: '极权社会主义',     s: '极权社', en: 'Totalitarian Socialist',   c: '#640000', alt: [] },
+  { id: 'communist',              zh: '威权社会主义',     s: '威权社', en: 'Authoritarian Socialist',  c: '#990000', alt: [] },
+  { id: 'libertarian_socialist',  zh: '自由意志社会主义', s: '自由社', en: 'Libertarian Socialist',    c: '#bd3643', alt: [] },
+  { id: 'social_democrat',        zh: '社会民主主义',     s: '社民',   en: 'Social Democrat',          c: '#ff0a66', alt: [] },
+  { id: 'social_liberal',         zh: '社会自由主义',     s: '社自',   en: 'Social Liberal',           c: '#ffaa1e', alt: [] },
+  { id: 'market_liberal',         zh: '市场自由主义',     s: '市自',   en: 'Market Liberal',           c: '#e1d700', alt: [] },
+  { id: 'conservative',           zh: '保守主义',         s: '保守',   en: 'Conservative',             c: '#0a0fff', alt: [] },
+  { id: 'authoritarian_democrat', zh: '威权民主主义',     s: '威民',   en: 'Authoritarian Democratic', c: '#7c7c7c', alt: [] },
+  { id: 'nationalist',            zh: '专制主义',         s: '专制',   en: 'Despotic',                 c: '#050505', alt: [] },
+  { id: 'fascist',                zh: '法西斯主义',       s: '法西斯', en: 'Fascist',                  c: '#7b542e', alt: [] },
+  { id: 'national_socialist',     zh: '民族社会主义',     s: '民社',   en: 'National Socialist',       c: '#4e3939', alt: [] }
+];
+const ideosOf = pal => pal === 'tfr' ? TFR_IDEOS : TNO_IDEOS;
 function normHex(h) {
   h = String(h || '#888888').trim().toLowerCase();
   if (/^#[0-9a-f]{3}$/.test(h)) return '#' + h[1] + h[1] + h[2] + h[2] + h[3] + h[3];
   return /^#[0-9a-f]{6}$/.test(h) ? h : '#888888';
 }
-function findIdeoByHex(hex) {
+function findIdeoByHex(hex, pal) {
   hex = normHex(hex);
-  return TNO_IDEOS.find(d => d.c === hex || d.alt.includes(hex)) || null;
+  return ideosOf(pal).find(d => d.c === hex || d.alt.includes(hex)) || null;
 }
-function findIdeoByText(txt) {
+function findIdeoByText(txt, pal) {
   const s = String(txt || '').trim().toLowerCase();
   if (!s) return null;
+  const list = ideosOf(pal);
+  if (pal === 'tfr') {
+    const aliases = [
+      ['totalitarian_socialist', ['极权社会主义', '极权社', 'totalitarian socialist', 'totalitarian_socialist']],
+      ['libertarian_socialist', ['自由意志社会主义', '自由社', 'libertarian socialist', 'libertarian_socialist']],
+      ['communist', ['威权社会主义', '威权社', '共产主义', 'authoritarian socialist', 'communist']],
+      ['social_democrat', ['社会民主主义', '社民', 'social democrat', 'social_democrat']],
+      ['social_liberal', ['社会自由主义', '社自', 'social liberal', 'social_liberal']],
+      ['market_liberal', ['市场自由主义', '市自', 'market liberal', 'market_liberal']],
+      ['authoritarian_democrat', ['威权民主主义', '威权民主', '威民', 'authoritarian democratic', 'authoritarian_democrat']],
+      ['national_socialist', ['民族社会主义', '民社', '纳粹', 'national socialist', 'national_socialist']],
+      ['conservative', ['保守主义', '保守', 'conservative']],
+      ['nationalist', ['专制主义', '专制', '民族主义', 'despotic', 'nationalist']],
+      ['fascist', ['法西斯主义', '法西斯', 'fascist']]
+    ];
+    for (const [id, keys] of aliases) {
+      if (keys.some(k => s.includes(k))) return list.find(d => d.id === id);
+    }
+    return null;
+  }
   const aliases = [
     ['liberal_conservatism', ['自由保守主义', '自由保守', '自保', 'liberal conservatism', 'liberal_conservatism']],
     ['national_socialism', ['民族社会主义', '民社', '纳粹', 'national socialism', 'national_socialism', 'natsoc']],
@@ -453,23 +489,24 @@ function findIdeoByText(txt) {
     ['communist', ['共产主义', '共产', 'communism', 'communist']]
   ];
   for (const [id, keys] of aliases) {
-    if (keys.some(k => s.includes(k))) return TNO_IDEOS.find(d => d.id === id);
+    if (keys.some(k => s.includes(k))) return list.find(d => d.id === id);
   }
   return null;
 }
-function ideoOrder(item) {
-  const hit = findIdeoByHex(item.c) || findIdeoByText(item.name);
-  return hit ? TNO_IDEOS.indexOf(hit) : 999;
+function ideoOrder(item, pal) {
+  const list = ideosOf(pal);
+  const hit = findIdeoByHex(item.c, pal) || findIdeoByText(item.name, pal);
+  return hit ? list.indexOf(hit) : 999;
 }
-function parsePie(txt) {
+function parsePie(txt, pal) {
   const out = [];
   String(txt || '').split('\n').forEach(line => {
     const m = line.match(/(-?\d+(?:\.\d+)?)/), c = line.match(/#[0-9a-fA-F]{3,8}\b/);
     if (m && +m[1] > 0) {
       let name = line.replace(m[0], '').replace(c ? c[0] : '', '').replace(/[%％]/g, '').trim();
-      const byName = findIdeoByText(name);
+      const byName = findIdeoByText(name, pal);
       const hex = c ? normHex(c[0]) : (byName ? byName.c : '#888888');
-      if (!name) { const hit = findIdeoByHex(hex); if (hit) name = hit.zh; }
+      if (!name) { const hit = findIdeoByHex(hex, pal); if (hit) name = hit.zh; }
       out.push({ v: +m[1], c: hex, name });
     }
   });
@@ -1206,12 +1243,415 @@ T.sfx = {
   groups: [{ title: '免费音效素材 Free sounds', fields: [{ k: 'lib', type: 'sfxlib' }] }],
   draw(s, lang) { return T.se.draw(getState('se', lang), lang); }
 };
-const ORDER = ['se', 'nu', 'dpb', 'dpa', 'cwn', 'cwall', 'sfx', 'news', 'report', 'pol', 'dv', 'cs', 'ci'];
+
+/* ============================================================================
+   THE FIRE RISES (烈焰升腾, 3350890356) — Official GUI layouts & EN/CN bitmap fonts
+   ============================================================================ */
+
+/* === TFR Super Event (interface/TFR_Super_Events.gui) === */
+T.tfr_se = {
+  name: 'TFR 超事件', en: 'TFR Super Event',
+  groups: [
+    { title: '文字 Text', fields: [
+      { k: 'title', type: 'text', label: '标题 Title', zh: '第二次美国内战', en: 'THE SECOND AMERICAN CIVIL WAR' },
+      { k: 'quote', type: 'textarea', label: '引言 Quote（回车换行）', rows: 4,
+        zh: '“一栋裂开的房子是站立不住的。\n我相信这个政府不能永远忍受半奴隶半自由的状态。”\n- 亚伯拉罕·林肯',
+        en: '"A house divided against itself cannot stand.\nI believe this government cannot endure permanently half slave and half free."\n- Abraham Lincoln' },
+      { k: 'option', type: 'text', label: '底部按钮 Button', zh: '火光冲天', en: 'The Fire Rises' }
+    ] },
+    { title: '图片 Picture', fields: [
+      { k: 'preset', type: 'thumbs', label: 'TFR 游戏原图 Sample pictures', list: () => (window.TNO_ASSETS.tfr_se || []).map(n => 'assets/tfr/se/' + n + '.png'), def: 'assets/tfr/se/super_USA_civil_war.png' },
+      ...picFields('pic', '上传自己的图片 Upload (982×594)'),
+      { k: 'filter', type: 'select', label: '滤镜 Filter', def: 'raw', opts: [['raw', '原色（叠官方紫蓝光罩）'], ['rawscan', '原色 + 细扫描线'], ['gray', '黑白 + 细扫描线']] },
+      { k: 'scan', type: 'range', label: '扫描线强度 Scanlines', min: 0, max: 1.5, step: 0.05, def: 0.6 }
+    ] },
+    { title: '配乐 Music（导出带配乐视频）', collapsed: true, fields: [{ k: 'music', type: 'audio' }] }
+  ],
+  async draw(s, lang) {
+    const up = userImg['tfr_se.pic'];
+    const [fTitle, fQuote, bg, bar, presetIm] = await Promise.all([
+      loadChain('tfr_vcr20', lang), loadChain('tfr_vcr16', lang),
+      TF('super_bg.png'), TF('spacebar.png'),
+      up ? null : loadImg(s.preset)
+    ]);
+    cv.width = 1001; cv.height = 639; ctx.clearRect(0, 0, cv.width, cv.height);
+    const im = up || presetIm;
+    // Picture sits behind Super_event_bg (which already carries the official TFR purple/pink CRT glow & quote box)
+    ctx.save();
+    ctx.beginPath(); ctx.rect(10, 30, 982, 594); ctx.clip();
+    if (up || s.filter !== 'raw') {
+      const mode = s.filter === 'gray' ? 'gray' : 'raw';
+      const scan = s.filter === 'raw' ? 0 : +s.scan;
+      ctx.drawImage(fxCanvas(im, 982, 594, up ? pp(s, 'pic') : null, mode, scan), 10, 30);
+    } else {
+      drawCover(ctx, im, 10, 30, 982, 594, null);
+    }
+    ctx.restore();
+    ctx.drawImage(bg, 0, 0);
+    textBox(ctx, s.title, fTitle, 'tfr_vcr20', { x: 260, y: 18, w: 490, h: 28, fmt: 'center', vcenter: true, fit: true });
+    textBox(ctx, s.quote, fQuote, 'tfr_vcr16', { x: 250, y: 435, w: 500, fmt: 'center', maxLines: 5 });
+    ctx.drawImage(bar, 350, 585);
+    textBox(ctx, s.option, fQuote, 'tfr_vcr16', { x: 350, y: 585, w: 300, h: 35, fmt: 'center', vcenter: true, fit: true });
+  }
+};
+
+/* === TFR Diplomacy View (interface/countrydiplomacyview.gui + TFR_interface_subideogly_notice.gui) === */
+T.tfr_dv = {
+  name: 'TFR 外交界面', en: 'TFR Diplomacy View',
+  groups: [
+    { title: '国家 Country', fields: [
+      { k: 'header', type: 'text', label: '顶部栏标题 Header', zh: '外交', en: 'Diplomacy' },
+      { k: 'country', type: 'text', label: '国名 Country', zh: '日本国', en: 'State of Japan' },
+      { k: 'faction', type: 'text', label: '阵营 Faction', zh: '太平洋防御条约组织', en: 'Pacific Defense Treaty Organization' },
+      { k: 'leader', type: 'text', label: '领袖 Leader', zh: '岸田文雄', en: 'Fumio Kishida' }
+    ] },
+    { title: '政党与饼图 Party & Pie', fields: [
+      { k: 'party', type: 'text', label: '执政党 Ruling party', zh: '自由民主党', en: 'Liberal Democratic Party' },
+      { k: 'ideology', type: 'text', label: '副意识形态 Sub-ideology', zh: '自由保守主义', en: 'Liberal Conservatism' },
+      { k: 'elections', type: 'text', label: '选举 Elections', zh: '下次选举：2025年7月', en: 'Next Election: July 2025' },
+      { k: 'pie', type: 'pie', palette: 'tfr', label: 'TFR 饼图：直接输入各主义占比（0 = 不显示，3 点钟顺时针）',
+        zh: '48 #0a0fff 保守主义\n20 #ffaa1e 社会自由主义\n12 #e1d700 市场自由主义\n10 #ff0a66 社会民主主义\n6 #7c7c7c 威权民主主义\n4 #990000 威权社会主义',
+        en: '48 #0a0fff Conservative\n20 #ffaa1e Social Liberal\n12 #e1d700 Market Liberal\n10 #ff0a66 Social Democrat\n6 #7c7c7c Authoritarian Democratic\n4 #990000 Authoritarian Socialist' }
+    ] },
+    { title: '国策与版式 Focus & Layout', fields: [
+      { k: 'goal', type: 'text', label: '当前国策 Active focus', zh: '未设置国家焦点', en: 'No National Focus set' },
+      { k: 'progress', type: 'range', label: '国策进度 Progress', min: 0, max: 1, step: 0.01, def: 0.55 },
+      { k: 'tab1', type: 'text', label: '左标签 Left tab', zh: '外交', en: 'Diplomacy' },
+      { k: 'tab2', type: 'text', label: '右标签 Right tab', zh: '情报总览', en: 'Intel Ledger' },
+      { k: 'spirits', type: 'check', label: '显示底部国家精神栏 National spirits bar', def: false },
+      { k: 'spirit_title', type: 'text', label: '国家精神标题', zh: '国家精神', en: 'National Spirits' }
+    ] },
+    { title: '图片 Pictures', fields: [
+      ...picFields('portrait', '领袖头像 Portrait (156×210)'),
+      { k: 'flag', type: 'image', label: '国旗 Flag (82×52)' },
+      { k: 'ideopic', type: 'image', label: '意识形态/阵营图标 Ideology icon（可选）' },
+      { k: 'goalicon', type: 'image', label: '国策图标 Focus icon（可选）' },
+      { k: 'spiritimgs', type: 'images', max: 6, label: '国家精神图标（开启底部栏时生效，最多 6 个）' },
+      { k: 'samples', type: 'check', label: '没上传头像/国策时显示默认占位图', def: true }
+    ] }
+  ],
+  async draw(s, lang) {
+    const [f24, f12, bg, hdr, cls, upBg, fov, ideoUnk, tabBg, tab, lfr, midBg, pieOv, gbtn, gunk, gprog, gprogBg, gprogFr, spBg, unk] = await Promise.all([
+      loadChain('tfr_vcr24', lang), loadChain('tfr_vcr12', lang),
+      TF('tiled_bg.png'), TF('header_bg.png'), TF('closebutton.png'), TF('diplo_upper.png'),
+      TF('flag_overlay.png'), TF('ideology_unknown.png'), TF('diplo_tab_bg.png'), TF('diplo_tab.png'),
+      TF('diplo_leader_frame.png'), TF('diplo_mid.png'), TF('pie_ov_diplo.png'),
+      TF('diplo_goal_btn.png'), TF('goal_unknown.png'), TF('pol_goal_prog.png'),
+      TF('pol_goal_prog_bg.png'), TF('pol_goal_prog_frame.png'), TF('diplo_spirits_bg.png'), TF('leader_unknown.png')
+    ]);
+    const W = 550, H = s.spirits ? 420 : 344;
+    cv.width = W; cv.height = H; ctx.clearRect(0, 0, W, H);
+    cornered(ctx, bg, 0, 0, W, H, 64, 64, true);
+    // Header bar (header_bg positioned at x=-248, y=6 inside 550px window)
+    ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip();
+    ctx.drawImage(hdr, -248, 6);
+    ctx.restore();
+    textBox(ctx, s.header, f24, 'tfr_vcr24', { x: 14, y: 8, w: 300, maxLines: 1 });
+    ctx.drawImage(cls, W - 43, 9);
+    // country_info origin y=50
+    const OY = 50;
+    ctx.drawImage(upBg, 139, OY - 4);
+    // Flag (82x52 inside 98x67 overlay at x=30, y=50)
+    const fl = userImg['tfr_dv.flag'];
+    if (fl) {
+      ctx.save(); ctx.beginPath(); ctx.rect(38, OY + 7, 82, 52); ctx.clip();
+      drawCover(ctx, fl, 38, OY + 7, 82, 52, null);
+      ctx.restore();
+    }
+    ctx.drawImage(fov, 30, OY);
+    const idIm = userImg['tfr_dv.ideopic'] || (s.samples ? ideoUnk : null);
+    if (idIm) fitIn(ctx, idIm, 158, OY, 66, 68, 1);
+    textBox(ctx, s.country, f12, 'tfr_vcr12', { x: 245, y: OY + 3, w: 240, fit: true });
+    textBox(ctx, s.faction, f12, 'tfr_vcr12', { x: 245, y: OY + 23, w: 235, fit: true });
+    textBox(ctx, s.leader, f12, 'tfr_vcr12', { x: 245, y: OY + 43, w: 250, fit: true });
+    // Tabs (Diplomacy / Intel Ledger)
+    ctx.drawImage(tabBg, 15, OY + 111);
+    ctx.drawImage(tab, 260, 0, 260, 42, 15, OY + 70, 260, 42);
+    ctx.drawImage(tab, 0, 0, 260, 42, 275, OY + 70, 260, 42);
+    textBox(ctx, s.tab1, f12, 'tfr_vcr12', { x: 15, y: OY + 70, w: 260, h: 42, fmt: 'center', vcenter: true, fit: true });
+    textBox(ctx, s.tab2, f12, 'tfr_vcr12', { x: 275, y: OY + 70, w: 260, h: 42, fmt: 'center', vcenter: true, fit: true });
+    // diplomacy_tab_top origin y=OY+110 (=160)
+    const TY = OY + 110;
+    const por = userImg['tfr_dv.portrait'] || (s.samples ? unk : null);
+    if (por) {
+      const pc = userImg['tfr_dv.portrait'] ? fxCanvas(por, 156, 210, pp(s, 'portrait'), 'raw', 0) : por;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(pc, 22, TY + 5, 156 * 0.75, 210 * 0.75);
+    }
+    ctx.drawImage(lfr, 13, TY);
+    ctx.drawImage(midBg, 138, TY);
+    // Pie chart (GFX_political_chart_big size 30 at x=192, y=TY+44)
+    const pie = parsePie(s.pie, 'tfr'), tot = pie.reduce((a, p) => a + p.v, 0);
+    if (tot > 0) {
+      let a0 = 0;
+      for (const p of pie) {
+        const a1 = a0 + p.v / tot * Math.PI * 2;
+        ctx.beginPath(); ctx.moveTo(192.5, TY + 44.5); ctx.arc(192.5, TY + 44.5, 30, a0, a1); ctx.closePath();
+        ctx.fillStyle = p.c; ctx.fill();
+        a0 = a1;
+      }
+    }
+    ctx.drawImage(pieOv, 157, TY + 9);
+    // Ruling party / subideology / elections (official 15px vertical spacing)
+    textBox(ctx, s.party, f12, 'tfr_vcr12', { x: 263, y: TY + 20, w: 245, fit: true });
+    textBox(ctx, s.ideology, f12, 'tfr_vcr12', { x: 263, y: TY + 35, w: 245, fit: true });
+    textBox(ctx, s.elections, f12, 'tfr_vcr12', { x: 263, y: TY + 50, w: 245, fit: true });
+    // Active national focus (origin x=144, y=TY+88)
+    const FX = 144, FY = TY + 88;
+    ctx.drawImage(gbtn, 0, 0, 285, 64, FX + 103, FY + 7, 285, 64);
+    const gi = userImg['tfr_dv.goalicon'] || (s.samples ? gunk : null);
+    if (gi) fitIn(ctx, gi, FX + 48 - 41, FY + 39 - 41, 82, 82, 1);
+    textBox(ctx, s.goal, f12, 'tfr_vcr12', { x: FX + 146, y: FY + 22, w: 200, h: 20, fmt: 'center', vcenter: true, fit: true });
+    const pMax = 212, pw = Math.round(pMax * Math.max(0, Math.min(1, +s.progress)));
+    ctx.drawImage(gprogBg, 0, 0, Math.min(gprogBg.width, pMax), 6, FX + 132, FY + 53, pMax, 6);
+    if (pw > 0) ctx.drawImage(gprog, 0, 6, Math.min(gprog.width, pw), 6, FX + 132, FY + 53, pw, 6);
+    ctx.drawImage(gprogFr, 0, 0, gprogFr.width, gprogFr.height, FX + 130, FY + 52, pMax + 4, 8);
+    // Optional national spirits bar
+    if (s.spirits) {
+      ctx.drawImage(spBg, 15, OY + 271);
+      textBox(ctx, s.spirit_title, f12, 'tfr_vcr12', { x: 22, y: OY + 286, w: 120, maxLines: 2 });
+      (userImg['tfr_dv.spiritimgs'] || []).slice(0, 6).forEach((im, i) => fitIn(ctx, im, 147 + i * 64, OY + 285, 60, 62, 1));
+    }
+  }
+};
+
+/* === TFR Country / Report Event (interface/eventwindow.gui EventWindow) === */
+T.tfr_report = {
+  name: 'TFR 弹窗事件', en: 'TFR Country Event',
+  groups: [
+    { title: '文字 Text', fields: [
+      { k: 'title', type: 'text', label: '标题 Title', zh: '华盛顿陷入戒严', en: 'Martial Law Declared in Washington' },
+      { k: 'desc', type: 'textarea', label: '正文 Description', rows: 8,
+        zh: '随着大选争议在全国多地演变为持续数周的暴力冲突，白宫与五角大楼今晨联合发布了紧急公告。国民警卫队装甲车已进驻主要交通枢纽，联邦政府宣布进入无限期紧急状态。\n\n各州州长与议会领袖的回应截然相反，没人敢断言明天清晨的美国是否还是同一个国家。',
+        en: 'Following weeks of escalating unrest across major metropolitan areas, the White House and the Pentagon issued a joint emergency proclamation before dawn. National Guard detachments have secured key transit corridors as an indefinite state of emergency takes effect.\n\nGovernors and congressional leaders have responded with starkly conflicting statements, leaving the nation on a knife edge.' },
+      { k: 'options', type: 'textarea', label: '选项（每行一个，可自动增高）Options', rows: 3, zh: '我们必须稳住局势。\n一切早已失控。', en: 'We must hold the line.\nEvents have moved beyond our control.' }
+    ] },
+    { title: '窗口版式 Window', fields: [
+      { k: 'size', type: 'select', label: '长度模板 Length', def: 'auto', opts: [['auto', '自动（跟随正文与选项）'], ['short', '短 Short'], ['medium', '中 Medium'], ['long', '长 Long']] },
+      { k: 'showPic', type: 'check', label: '显示底部事件图（500×250，官方样式）', def: true }
+    ] },
+    { title: '图片 Picture', fields: [
+      ...picFields('pic', '上传事件图 Upload (500×250)'),
+      { k: 'gray', type: 'check', label: '转为黑白 Greyscale', def: false }
+    ] }
+  ],
+  async draw(s, lang) {
+    const up = userImg['tfr_report.pic'];
+    const [fTitle, fDesc, fOpt, top, mid, bot, opt, mini, sampleIm] = await Promise.all([
+      loadChain('tfr_electro20', lang), loadChain('tfr_electro', lang), loadChain('tfr_opt', lang),
+      TF('report_top.png'), TF('report_mid.png'), TF('report_bot.png'),
+      TF('option_entry.png'), TF('btn_minimize.png'),
+      up ? null : TF('report_sample.png')
+    ]);
+    const L = layout(s.desc, fDesc, 520, STYLE.bomb);
+    const opts = String(s.options || '').split('\n').map(x => x.trim()).filter(Boolean);
+    const extraOpt = Math.max(0, opts.length - 3) * 48;
+    const minH = { auto: 60, short: 90, medium: 220, long: 380 }[s.size] || 60;
+    const Hm = Math.max(minH, L.height + 24) + (s.showPic ? extraOpt : opts.length * 48 + 20);
+    const botH = s.showPic ? bot.height : 64;
+    const W = top.width, H = top.height + Hm + botH;
+    cv.width = W; cv.height = H; ctx.clearRect(0, 0, W, H);
+    ctx.drawImage(top, 0, 0);
+    // Tile clean middle scanline section of report_mid (rows 16..64) so there are zero seams
+    const stripY = 16, stripH = mid.height - 32;
+    for (let y = 0; y < Hm; y += stripH) {
+      const dh = Math.min(stripH, Hm - y);
+      ctx.drawImage(mid, 0, stripY, W, dh, 0, top.height + y, W, dh);
+    }
+    const by = top.height + Hm;
+    if (s.showPic) {
+      ctx.drawImage(bot, 0, by);
+      const im = up || sampleIm;
+      const picX = 52, picY = by + 130, picW = 500, picH = 250;
+      if (up || s.gray) ctx.drawImage(fxCanvas(im, picW, picH, up ? pp(s, 'pic') : null, s.gray ? 'gray' : 'raw', 0), picX, picY);
+      else drawCover(ctx, im, picX, picY, picW, picH, null);
+    } else {
+      ctx.drawImage(bot, 0, bot.height - botH, W, botH, 0, by, W, botH);
+    }
+    ctx.drawImage(mini, 40, 47);
+    textBox(ctx, s.title, fTitle, 'tfr_electro20', { x: 27, y: 70, w: 551, fmt: 'center', fit: true });
+    drawLayout(ctx, L, 45, 114, 520, 'left');
+    // Options sit above the bottom picture (matching official eventwindow.gui options_grid y=-15, picture y=130)
+    const optStartY = s.showPic ? (by - 15 - extraOpt) : (by - opts.length * 48 - 4);
+    opts.forEach((o, i) => {
+      const ox = Math.round((W - opt.width) / 2), oy = optStartY + i * 48;
+      ctx.drawImage(opt, ox, oy);
+      textBox(ctx, o, fOpt, 'tfr_opt', { x: ox + 6, y: oy + 4, w: opt.width - 12, h: opt.height - 8, fmt: 'center', vcenter: true, maxLines: 2 });
+    });
+  }
+};
+
+/* === TFR News Event (interface/eventwindow.gui EventWindow_News — browser window) === */
+T.tfr_news = {
+  name: 'TFR 新闻事件', en: 'TFR News Event',
+  groups: [
+    { title: '文字 Text', fields: [
+      { k: 'title', type: 'text', label: '标题 Headline', zh: '台海危机全面升级', en: 'Taiwan Strait Crisis Escalates' },
+      { k: 'desc', type: 'textarea', label: '正文 Body', rows: 9,
+        zh: '国际观察家快讯：今日凌晨起，西太平洋多处海空域出现大规模军事调动，区域主要航运与金融市场随即剧烈震荡。\n\n多国驻外机构已启动紧急撤侨预案，联合国安理会正就召开特别会议展开磋商。分析人士指出，这场危机可能成为二十一世纪地缘格局的决定性转折点。',
+        en: 'INTERNATIONAL OBSERVER — Large-scale naval and air deployments were reported across the Western Pacific before dawn today, sending shockwaves through global shipping lanes and financial markets.\n\nMultiple foreign missions have activated emergency evacuation protocols while the UN Security Council convenes an urgent session. Analysts warn that this standoff could mark the defining turning point of the twenty-first century.' },
+      { k: 'options', type: 'textarea', label: '选项（每行一个）Options', rows: 2, zh: '世界屏息以待。', en: 'The world holds its breath.' }
+    ] },
+    { title: '窗口长度 Window length', fields: [
+      { k: 'size', type: 'select', label: '长度 Length', def: 'std', opts: [['std', '标准（同官方新闻页）'], ['auto', '自动（跟随正文长短）'], ['short', '短 Short'], ['long', '长 Long']] }
+    ] },
+    { title: '图片 Picture', fields: [
+      ...picFields('pic', '上传新闻图 Upload (397×153)'),
+      { k: 'gray', type: 'check', label: '转为黑白 Greyscale', def: false }
+    ] }
+  ],
+  async draw(s, lang) {
+    const up = userImg['tfr_news.pic'];
+    const [fTitle, fDesc, fOpt, bg, ov, opt, mini, sampleIm] = await Promise.all([
+      loadChain('tfr_kenyan28', lang), loadChain('tfr_electro', lang), loadChain('tfr_opt', lang),
+      TF('news_bg.png'), TF('news_pic_overlay.png'), TF('option_entry.png'), TF('btn_minimize.png'),
+      up ? null : TF('news_sample.png')
+    ]);
+    const L = layout(s.desc, fDesc, 560, STYLE.bomb);
+    const opts = String(s.options || '').split('\n').map(x => x.trim()).filter(Boolean);
+    const optBlockH = Math.max(1, opts.length) * 50;
+    // news_bg.png (713x935): top header+pic bay 0..340, clean tileable scanline band 340..680, bottom fade 680..855
+    const topH = 340, tileSrcY = 340, tileSrcH = 340, botSrcY = 680, botH = 175;
+    const neededBodyH = L.height + 24 + optBlockH + 10;
+    const targetBodyH = {
+      std: Math.max(365, neededBodyH),
+      auto: Math.max(160, neededBodyH),
+      short: Math.max(210, neededBodyH),
+      long: Math.max(540, neededBodyH)
+    }[s.size] || Math.max(365, neededBodyH);
+    const midH = Math.max(0, targetBodyH - 95); // botH includes ~95px of usable white paper above bottom glow
+    const W = bg.width, H = topH + midH + botH;
+    cv.width = W; cv.height = H; ctx.clearRect(0, 0, W, H);
+    ctx.drawImage(bg, 0, 0, W, topH, 0, 0, W, topH);
+    for (let y = 0; y < midH; y += tileSrcH) {
+      const dh = Math.min(tileSrcH, midH - y);
+      ctx.drawImage(bg, 0, tileSrcY, W, dh, 0, topH + y, W, dh);
+    }
+    ctx.drawImage(bg, 0, botSrcY, W, botH, 0, topH + midH, W, botH);
+    // News picture (397x153 at 150,164) + overlay (143,160)
+    const im = up || sampleIm;
+    if (up || s.gray) ctx.drawImage(fxCanvas(im, 397, 153, up ? pp(s, 'pic') : null, s.gray ? 'gray' : 'raw', 0), 150, 164);
+    else drawCover(ctx, im, 150, 164, 397, 153, null);
+    ctx.drawImage(ov, 143, 160);
+    ctx.drawImage(mini, 45, 20);
+    textBox(ctx, s.title, fTitle, 'tfr_kenyan28', { x: 120, y: 106, w: 460, fmt: 'center', maxLines: 2 });
+    drawLayout(ctx, L, 75, 325, 560, 'left');
+    // Options anchored neatly above bottom white edge (H - 85 - optBlockH)
+    const optStartY = H - 82 - optBlockH;
+    opts.forEach((o, i) => {
+      const ox = Math.round((W - opt.width) / 2), oy = optStartY + i * 50;
+      ctx.drawImage(opt, ox, oy);
+      textBox(ctx, o, fOpt, 'tfr_opt', { x: ox + 6, y: oy + 4, w: opt.width - 12, h: opt.height - 8, fmt: 'center', vcenter: true, maxLines: 2 });
+    });
+  }
+};
+
+/* === TFR Politics / Leader & Country View (interface/countrypoliticsview.gui) === */
+T.tfr_pol = {
+  name: 'TFR 国家/人物介绍', en: 'TFR Politics View',
+  groups: [
+    { title: '领袖与政党 Leader & party', fields: [
+      { k: 'header', type: 'text', label: '窗口标题 Header', zh: '政治', en: 'Political' },
+      { k: 'leader', type: 'text', label: '领袖姓名 Leader', zh: '乔·拜登', en: 'Joe Biden' },
+      ...picFields('portrait', '领袖头像 Portrait (156×210)'),
+      { k: 'subideo', type: 'textarea', rows: 2, label: '执政党 / 副意识形态（可换行）', zh: '民主党\n社会自由主义', en: 'Democratic Party\nNeoliberalism' },
+      { k: 'elections', type: 'text', label: '选举 Elections', zh: '下次选举：2024年11月', en: 'Next Election: Nov 2024' },
+      { k: 'econ', type: 'text', label: '经济体制标签 Economy type', zh: '美式资本主义', en: 'American Capitalism' }
+    ] },
+    { title: 'TFR 饼图 Pie chart（输入各主义占比）', fields: [
+      { k: 'pie', type: 'pie', palette: 'tfr', label: '填入各意识形态占比数字（0 = 不显示，右侧自动生成党派图例）',
+        zh: '38 #ffaa1e 社会自由主义\n34 #0a0fff 保守主义\n14 #ff0a66 社会民主主义\n8 #7c7c7c 威权民主主义\n6 #e1d700 市场自由主义',
+        en: '38 #ffaa1e Social Liberal\n34 #0a0fff Conservative\n14 #ff0a66 Social Democrat\n8 #7c7c7c Authoritarian Democratic\n6 #e1d700 Market Liberal' }
+    ] },
+    { title: '国策与图标 Focus & icons', fields: [
+      { k: 'goal', type: 'text', label: '当前国策 Active focus', zh: '重塑美国灵魂', en: 'Restore the Soul of the Nation' },
+      { k: 'progress', type: 'range', label: '国策进度 Progress', min: 0, max: 1, step: 0.01, def: 0.5 },
+      { k: 'goalicon', type: 'image', label: '国策图标 Focus icon（可选）' },
+      { k: 'econicon', type: 'image', label: '经济体制图标（左下左槽，可选）' },
+      { k: 'factionicon', type: 'image', label: '阵营图标（左下右槽，可选）' },
+      { k: 'spirits', type: 'images', max: 6, label: '国家精神图标（最多 6 个）' },
+      { k: 'samples', type: 'check', label: '没上传头像/国策时显示默认占位图', def: true }
+    ] }
+  ],
+  async draw(s, lang) {
+    const [f24, f14, f12, f10, win, hdr, cls, bg, lfr, gbg, gbtn, gunk, gprog, gprogBg, gprogFr, pieOv, unk] = await Promise.all([
+      loadChain('tfr_vcr24', lang), loadChain('tfr_vcr14', lang), loadChain('tfr_vcr12', lang), loadChain('tfr_vcr10', lang),
+      TF('tiled_thin2.png'), TF('header_bg.png'), TF('closebutton.png'), TF('pol_bg.png'),
+      TF('pol_leader_frame.png'), TF('pol_goal_bg.png'), TF('pol_goal_btn.png'), TF('goal_unknown_2.png'),
+      TF('pol_goal_prog.png'), TF('pol_goal_prog_bg.png'), TF('pol_goal_prog_frame.png'),
+      TF('pie_ov_pol.png'), TF('leader_unknown.png')
+    ]);
+    const W = 726, H = 446;
+    cv.width = W; cv.height = H; ctx.clearRect(0, 0, W, H);
+    cornered(ctx, win, 0, 0, W, H, 64, 64, true);
+    ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip();
+    ctx.drawImage(hdr, -70, 4);
+    ctx.restore();
+    textBox(ctx, s.header, f24, 'tfr_vcr24', { x: 40, y: 10, w: 400, maxLines: 1 });
+    ctx.drawImage(cls, W - 43, 6);
+    ctx.drawImage(bg, 2, 40);
+    // Leader portrait + frame + name
+    const por = userImg['tfr_pol.portrait'] || (s.samples ? unk : null);
+    if (por) {
+      const pc = userImg['tfr_pol.portrait'] ? fxCanvas(por, 156, 210, pp(s, 'portrait'), 'raw', 0) : por;
+      ctx.drawImage(pc, 13, 55, 156, 210);
+    }
+    ctx.drawImage(lfr, 6, 49);
+    textBox(ctx, s.leader, f12, 'tfr_vcr12', { x: 15, y: 275, w: 155, h: 20, fmt: 'center', vcenter: true, fit: true });
+    // Economy icon + faction icon + economy label
+    if (userImg['tfr_pol.econicon']) fitIn(ctx, userImg['tfr_pol.econicon'], 17, 324, 68, 68, 1);
+    if (userImg['tfr_pol.factionicon']) fitIn(ctx, userImg['tfr_pol.factionicon'], 103, 324, 68, 68, 1);
+    textBox(ctx, s.econ, f12, 'tfr_vcr12', { x: 12, y: 401, w: 162, h: 24, fmt: 'center', vcenter: true, fit: true });
+    // Active focus (origin 187,52)
+    ctx.drawImage(gbg, 187, 52);
+    ctx.drawImage(gbtn, 0, 0, 258, 83, 280, 64, 258, 83);
+    const gi = userImg['tfr_pol.goalicon'] || (s.samples ? gunk : null);
+    if (gi) fitIn(ctx, gi, 187 + 50 - 44, 52 + 53 - 44, 88, 88, 1);
+    textBox(ctx, s.goal, f14, 'tfr_vcr14', { x: 307, y: 92, w: 200, h: 20, fmt: 'center', vcenter: true, fit: true });
+    const pMax = 212, pw = Math.round(pMax * Math.max(0, Math.min(1, +s.progress)));
+    ctx.drawImage(gprogBg, 0, 0, Math.min(gprogBg.width, pMax), 6, 302, 128, pMax, 6);
+    if (pw > 0) ctx.drawImage(gprog, 0, 6, Math.min(gprog.width, pw), 6, 302, 128, pw, 6);
+    ctx.drawImage(gprogFr, 0, 0, gprogFr.width, gprogFr.height, 300, 127, pMax + 4, 8);
+    // National spirits strip (up to 6)
+    (userImg['tfr_pol.spirits'] || []).slice(0, 6).forEach((im, i) => fitIn(ctx, im, 288 + i * 68, 174, 62, 62, 1));
+    // Ruling party / subideology + elections
+    textBox(ctx, s.subideo, f12, 'tfr_vcr12', { x: 192, y: 262, w: 185, maxLines: 2 });
+    textBox(ctx, s.elections, f10, 'tfr_vcr10', { x: 192, y: 300, w: 185, fit: true });
+    // Political pie chart (GFX_political_chart size 39, overlay 90x87 at 398,327 -> center 443,370.5)
+    const pie = parsePie(s.pie, 'tfr'), tot = pie.reduce((a, p) => a + p.v, 0);
+    if (tot > 0) {
+      let a0 = 0;
+      for (const p of pie) {
+        const a1 = a0 + p.v / tot * Math.PI * 2;
+        ctx.beginPath(); ctx.moveTo(443, 370.5); ctx.arc(443, 370.5, 39, a0, a1); ctx.closePath();
+        ctx.fillStyle = p.c; ctx.fill();
+        a0 = a1;
+      }
+      // Official TFR party popularity legend in right box (x=512..710, y=254..424)
+      pie.slice(0, 10).forEach((p, i) => {
+        const ly = 256 + i * 17;
+        ctx.fillStyle = p.c; ctx.fillRect(518, ly + 3, 10, 10);
+        ctx.strokeStyle = 'rgba(255,255,255,0.28)'; ctx.lineWidth = 1; ctx.strokeRect(518.5, ly + 3.5, 9, 9);
+        const pct = Math.round(p.v / tot * 100) + '%';
+        textBox(ctx, p.name || p.c, f12, 'tfr_vcr12', { x: 534, y: ly, w: 130, fit: true });
+        textBox(ctx, pct, f12, 'tfr_vcr12', { x: 666, y: ly, w: 40, fmt: 'right', fit: true });
+      });
+    }
+    ctx.drawImage(pieOv, 398, 327);
+  }
+};
+
+const TNO_ORDER = ['se', 'nu', 'dpb', 'dpa', 'cwn', 'cwall', 'sfx', 'news', 'report', 'pol', 'dv', 'cs', 'ci'];
+const TFR_ORDER = ['tfr_se', 'tfr_dv', 'tfr_report', 'tfr_news', 'tfr_pol'];
+const lastTab = { tno: 'se', tfr: 'tfr_se' };
 let cur = 'se', lang = 'zh';
 let store = {};
 try { store = JSON.parse(localStorage.getItem('tno-maker-v1') || '{}') || {}; } catch (e) { store = {}; }
 try { const m = JSON.parse(localStorage.getItem('tno-maker-ui') || '{}'); if (T[m.cur]) cur = m.cur; if (m.lang === 'en' || m.lang === 'zh') lang = m.lang; } catch (e) {}
 if (T[location.hash.slice(1)]) cur = location.hash.slice(1);
+let curMod = cur.startsWith('tfr_') ? 'tfr' : 'tno';
+lastTab[curMod] = cur;
+const ORDER_OF = mod => mod === 'tfr' ? TFR_ORDER : TNO_ORDER;
 const save = () => { try { localStorage.setItem('tno-maker-v1', JSON.stringify(store)); localStorage.setItem('tno-maker-ui', JSON.stringify({ cur, lang })); } catch (e) {} };
 
 const fieldsOf = t => T[t].groups.flatMap(g => g.fields || []);
@@ -1281,13 +1721,29 @@ function prefetchTab(t, lg) {
   if (t === 'ci') {
     return safe(['aldrich_32_outline', 'aldrich_20_outline', 'aldrich_18_outline', 'Bomb_16'].map(n => loadChain(n, lg)).concat(['ci_bg.png', 'ci_tabs.png'].map(A)));
   }
+  if (t === 'tfr_se') {
+    const s = getState('tfr_se', lg);
+    return safe([loadChain('tfr_vcr20', lg), loadChain('tfr_vcr16', lg), TF('super_bg.png'), TF('spacebar.png'), userImg['tfr_se.pic'] ? null : loadImg(s.preset)]);
+  }
+  if (t === 'tfr_dv') {
+    return safe([loadChain('tfr_vcr24', lg), loadChain('tfr_vcr12', lg), TF('tiled_bg.png'), TF('header_bg.png'), TF('diplo_upper.png'), TF('diplo_mid.png'), TF('diplo_leader_frame.png'), TF('diplo_tab.png'), TF('diplo_goal_btn.png')]);
+  }
+  if (t === 'tfr_report') {
+    return safe([loadChain('tfr_electro20', lg), loadChain('tfr_electro', lg), loadChain('tfr_opt', lg), TF('report_top.png'), TF('report_mid.png'), TF('report_bot.png'), TF('option_entry.png'), TF('report_sample.png')]);
+  }
+  if (t === 'tfr_news') {
+    return safe([loadChain('tfr_kenyan28', lg), loadChain('tfr_electro', lg), loadChain('tfr_opt', lg), TF('news_bg.png'), TF('news_pic_overlay.png'), TF('option_entry.png'), TF('news_sample.png')]);
+  }
+  if (t === 'tfr_pol') {
+    return safe([loadChain('tfr_vcr24', lg), loadChain('tfr_vcr14', lg), loadChain('tfr_vcr12', lg), loadChain('tfr_vcr10', lg), TF('tiled_thin2.png'), TF('header_bg.png'), TF('pol_bg.png'), TF('pol_leader_frame.png'), TF('pol_goal_bg.png'), TF('pol_goal_btn.png')]);
+  }
   return Promise.resolve();
 }
-let warmStarted = false;
+const warmedMods = {};
 function warmCommonTabs() {
-  if (warmStarted) return;
-  warmStarted = true;
-  const queue = ['cwall', 'nu', 'dpa', 'cwn', 'se', 'dpb'].filter(k => k !== cur);
+  if (warmedMods[curMod]) return;
+  warmedMods[curMod] = true;
+  const queue = (curMod === 'tfr' ? TFR_ORDER : ['cwall', 'nu', 'dpa', 'cwn', 'se', 'dpb']).filter(k => k !== cur);
   const next = () => {
     const k = queue.shift();
     if (!k) return;
@@ -1390,14 +1846,16 @@ function normalizePie100(rows) {
   });
 }
 function buildPieUI(tab, f, initVal) {
-  // Split parsed entries into: official TNO ideology map (id -> value) + any custom non-TNO slices
+  const pal = f.palette || 'tno';
+  const IDEOS = ideosOf(pal);
+  // Split parsed entries into: official ideology map (id -> value) + any custom non-official slices
   const vals = {};
   let custom = [];
   function loadFromText(txt) {
-    TNO_IDEOS.forEach(d => { vals[d.id] = 0; });
+    IDEOS.forEach(d => { vals[d.id] = 0; });
     custom = [];
-    parsePie(txt).forEach(r => {
-      const hit = findIdeoByHex(r.c) || findIdeoByText(r.name);
+    parsePie(txt, pal).forEach(r => {
+      const hit = findIdeoByHex(r.c, pal) || findIdeoByText(r.name, pal);
       if (hit) vals[hit.id] = (vals[hit.id] || 0) + r.v;
       else custom.push({ v: r.v, c: r.c, name: r.name || '' });
     });
@@ -1410,14 +1868,14 @@ function buildPieUI(tab, f, initVal) {
   const grid = el('div', { className: 'pie-grid' });
   const custBox = el('div', { className: 'pie-rows' });
   const tools = el('div', { className: 'pie-tools' });
-  const raw = el('textarea', { rows: 5, placeholder: '也可以直接每行输入，如：\n民族社会主义 40\n专制主义 35\n家长制 25' });
+  const raw = el('textarea', { rows: 5, placeholder: pal === 'tfr' ? '也可以每行直接输入，如：\n保守主义 45\n社会自由主义 35\n专制主义 20' : '也可以直接每行输入，如：\n民族社会主义 40\n专制主义 35\n家长制 25' });
   raw.hidden = true;
   const totEl = el('span', { className: 'pie-tot' });
   const cellRefs = {};
 
   function activeRows() {
     const out = [];
-    TNO_IDEOS.forEach(d => {
+    IDEOS.forEach(d => {
       const v = +vals[d.id] || 0;
       if (v > 0) out.push({ v, c: d.c, name: lang === 'zh' ? d.zh : d.en });
     });
@@ -1429,7 +1887,7 @@ function buildPieUI(tab, f, initVal) {
   }
 
   function syncBarAndCells() {
-    TNO_IDEOS.forEach(d => {
+    IDEOS.forEach(d => {
       const ref = cellRefs[d.id];
       if (!ref) return;
       const v = +vals[d.id] || 0;
@@ -1477,8 +1935,8 @@ function buildPieUI(tab, f, initVal) {
     });
   }
 
-  // Fixed 2-column grid of all 12 official TNO ideologies — just type the number for each!
-  TNO_IDEOS.forEach(d => {
+  // Fixed 2-column grid of all official ideologies — just type the number for each!
+  IDEOS.forEach(d => {
     const dot = el('i'); dot.style.background = d.c;
     const nm = el('span', { text: lang === 'zh' ? d.zh : d.en, title: (lang === 'zh' ? d.zh + ' · ' + d.en : d.en + ' · ' + d.zh) + ' (' + d.c + ')' });
     const inp = el('input', { type: 'number', min: 0, max: 999, step: 1, inputmode: 'decimal' });
@@ -1496,7 +1954,7 @@ function buildPieUI(tab, f, initVal) {
   // Action buttons
   const btnNorm = el('button', { type: 'button', className: 'btn', text: '归一 100%' });
   btnNorm.addEventListener('click', () => {
-    const keys = TNO_IDEOS.map(d => d.id).filter(id => (+vals[id] || 0) > 0);
+    const keys = IDEOS.map(d => d.id).filter(id => (+vals[id] || 0) > 0);
     const all = keys.map(id => ({ type: 'ideo', id, v: +vals[id] })).concat(custom.filter(r => (+r.v || 0) > 0).map(r => ({ type: 'cust', r, v: +r.v })));
     if (!all.length) return;
     normalizePie100(all);
@@ -1506,7 +1964,7 @@ function buildPieUI(tab, f, initVal) {
   });
   const btnClr = el('button', { type: 'button', className: 'btn', text: '全部清零' });
   btnClr.addEventListener('click', () => {
-    TNO_IDEOS.forEach(d => { vals[d.id] = 0; });
+    IDEOS.forEach(d => { vals[d.id] = 0; });
     custom = [];
     rebuildCustom();
     commit(true);
@@ -1604,6 +2062,7 @@ function addFields(fs, tab, s, fields) {
           setVal(tab, f, src);
           if (tab === 'se') { userImg['se.pic'] = null; imgRev++; }
           if (tab === 'nu') { userImg['nu.pic'] = null; imgRev++; }
+          if (tab === 'tfr_se') { userImg['tfr_se.pic'] = null; imgRev++; }
           if (tab === 'news') { userImg['news.hdr'] = null; imgRev++; }
           render(true);
         });
@@ -1909,16 +2368,21 @@ const tabBtns = {};
 function updateTabs() {
   for (const k in tabBtns) tabBtns[k].setAttribute('aria-selected', k === cur ? 'true' : 'false');
 }
+function updateModUI() {
+  $('#mod-tno').setAttribute('aria-pressed', curMod === 'tno');
+  $('#mod-tfr').setAttribute('aria-pressed', curMod === 'tfr');
+}
 function buildTabs() {
   const nav = $('#tabs'); nav.textContent = '';
-  ORDER.forEach(k => {
+  for (const k in tabBtns) delete tabBtns[k];
+  ORDER_OF(curMod).forEach(k => {
     const b = el('button', { type: 'button', role: 'tab' }, [document.createTextNode(T[k].name), el('span', { text: T[k].en })]);
     b.setAttribute('aria-selected', k === cur ? 'true' : 'false');
     b.addEventListener('pointerenter', () => prefetchTab(k, lang));
     b.addEventListener('focus', () => prefetchTab(k, lang));
     b.addEventListener('click', () => {
       if (cur === k) return;
-      cur = k; save(); try { history.replaceState(null, '', '#' + k); } catch (e) {}
+      cur = k; lastTab[curMod] = k; save(); try { history.replaceState(null, '', '#' + k); } catch (e) {}
       updateTabs();
       render(true);
       buildForm();
@@ -1927,6 +2391,15 @@ function buildTabs() {
     nav.appendChild(b);
   });
 }
+function setMod(mod) {
+  if (curMod === mod) return;
+  curMod = mod;
+  cur = lastTab[mod] || ORDER_OF(mod)[0];
+  save(); try { history.replaceState(null, '', '#' + cur); } catch (e) {}
+  updateModUI(); buildTabs(); render(true); buildForm();
+}
+$('#mod-tno').addEventListener('click', () => setMod('tno'));
+$('#mod-tfr').addEventListener('click', () => setMod('tfr'));
 function setLang(l) {
   lang = l; save();
   $('#lang-zh').setAttribute('aria-pressed', l === 'zh'); $('#lang-en').setAttribute('aria-pressed', l === 'en');
@@ -1984,6 +2457,6 @@ $('#reset').addEventListener('click', () => {
 });
 
 $('#lang-zh').setAttribute('aria-pressed', lang === 'zh'); $('#lang-en').setAttribute('aria-pressed', lang === 'en');
-buildTabs(); buildForm(); render(true);
+updateModUI(); buildTabs(); buildForm(); render(true);
 window.__tno = { T, render, userImg, getState: () => getState(cur, lang), prefetchTab };
 })();
