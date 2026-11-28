@@ -756,54 +756,6 @@ function nuPicture(im, w, h, p, mode) {
   nuPicCache = { key, canvas: t };
   return t;
 }
-/* === Red / gold neon text effect (2026-11-28), measured from the user's TNO Russia screenshots (work/glow_profile.py):
-       vertical gradient on the letters (pale at the top, saturated at the bottom), a tight halo that is deeper and
-       more saturated than the letters (gold's halo turns orange), a faint dark ring, and a wide soft bloom (additive).
-       Works on any alpha shape: src region (sx,sy,W,H) is drawn at (dx,dy); bands = [[y0,y1]...] in src coords. === */
-const NEON = {
-  red:  { top: '#f8dee2', mid: '#fa96a8', bot: '#fe6880', halo: '205,70,98',  bloom: '230,60,95',  core: '255,236,240' },
-  gold: { top: '#f4e8be', mid: '#f2e596', bot: '#f0e462', halo: '214,140,44', bloom: '235,150,30', core: '255,250,225' }
-};
-const NEON_OPTS = [['none', '原样（下半压暗 + 黑晕）'], ['red', '红霓虹（粉红荧光）'], ['gold', '金霓虹（柠檬金荧光）']];
-const neonF = document.createElement('canvas'), neonFc = neonF.getContext('2d');
-const neonK = document.createElement('canvas'), neonKc = neonK.getContext('2d');
-function neonDraw(dst, src, sx, sy, W, H, dx, dy, name, em, bands, amt = 1) {
-  const P = NEON[name];
-  if (neonF.width < W || neonF.height < H) { neonF.width = neonK.width = Math.max(W, neonF.width); neonF.height = neonK.height = Math.max(H, neonF.height); }
-  // letters: gradient fill per line
-  neonFc.globalCompositeOperation = 'source-over'; neonFc.clearRect(0, 0, neonF.width, neonF.height);
-  neonFc.drawImage(src, sx, sy, W, H, 0, 0, W, H);
-  neonFc.globalCompositeOperation = 'source-atop';
-  neonFc.fillStyle = P.mid; neonFc.fillRect(0, 0, W, H);
-  bands.forEach(([a, b]) => {
-    const g = neonFc.createLinearGradient(0, a, 0, b);
-    g.addColorStop(0, P.top); g.addColorStop(.5, P.mid); g.addColorStop(1, P.bot);
-    neonFc.fillStyle = g; neonFc.fillRect(0, a, W, b - a);
-  });
-  neonFc.globalCompositeOperation = 'source-over';
-  // faint hot core: the shape eroded by 1px, brightened a touch
-  neonKc.globalCompositeOperation = 'source-over'; neonKc.clearRect(0, 0, neonK.width, neonK.height);
-  neonKc.drawImage(src, sx, sy, W, H, 0, 0, W, H);
-  neonKc.globalCompositeOperation = 'destination-in';
-  [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([x, y]) => neonKc.drawImage(src, sx, sy, W, H, x, y, W, H));
-  neonKc.globalCompositeOperation = 'source-in';
-  neonKc.fillStyle = 'rgba(' + P.core + ',0.08)'; neonKc.fillRect(0, 0, W, H);
-  neonKc.globalCompositeOperation = 'source-over';
-  const OFF = 9000, sh = (col, a, blur, comp) => {
-    dst.globalCompositeOperation = comp; dst.shadowColor = 'rgba(' + col + ',' + Math.min(1, a) + ')'; dst.shadowBlur = blur;
-    dst.drawImage(src, sx, sy, W, H, dx - OFF, dy, W, H);
-  };
-  dst.save();
-  dst.shadowOffsetX = OFF; dst.shadowOffsetY = 0;
-  sh('0,0,0', 0.5, em * 0.3, 'source-over');                 // dark ring right outside the halo (seen at 2-3px in the refs)
-  sh(P.bloom, 0.55 * amt, em * 0.32, 'lighter');              // wide bloom, tints whatever is behind
-  sh(P.bloom, 0.35 * amt, em * 0.65, 'lighter');
-  sh(P.halo, 0.85 * amt, em * 0.1, 'source-over');            // tight halo hugging the strokes
-  sh(P.halo, 0.6 * amt, em * 0.2, 'source-over');
-  dst.restore();
-  dst.drawImage(neonF, 0, 0, W, H, dx, dy, W, H);
-  dst.save(); dst.globalCompositeOperation = 'lighter'; dst.drawImage(neonK, 0, 0, W, H, dx, dy, W, H); dst.restore();
-}
 const nuT = document.createElement('canvas'), nuTc = nuT.getContext('2d');
 /* centred text block; `split` = where (in em from the line top) the lower half starts to be darkened */
 function nuText(c, text, font, o) {
@@ -816,10 +768,6 @@ function nuText(c, text, font, o) {
   nuTc.globalCompositeOperation = 'source-over';
   nuTc.clearRect(0, 0, nuT.width, nuT.height);
   drawLayout(nuTc, L, pad, pad, o.w, 'center');
-  if (NEON[o.neon]) {
-    const bands = L.lines.map((ln, i) => { const t = pad + i * o.pitch; return [t + o.em * 0.08, t + o.em * 0.92]; });
-    return neonDraw(c, nuT, 0, 0, W, H, Math.round(o.cx - o.w / 2) - pad, o.y - pad, o.neon, o.em, bands);
-  }
   nuTc.globalCompositeOperation = 'source-atop';
   L.lines.forEach((ln, i) => {
     const y = pad + i * o.pitch + o.split * o.em;
@@ -859,9 +807,9 @@ async function drawNuTo(outCv, outCtx, s, lang, useCwLabels) {
   outCtx.drawImage(glass, 0, 0);
   outCtx.drawImage(frame, 0, 0);
   // 方正综艺简体 (FZZYJW--GB1-0), sizes fitted to the .ipv composite: 1x title 21px, quote and button 17px, no tracking
-  nuText(outCtx, s.title, ft, { cx: 600, y: 46, w: 1000, em: 42, pitch: 60, split: 0.624, glow: 0.3, maxLines: 1, neon: s.neon });
-  nuText(outCtx, s.quote, fq, { cx: 587, y: 583, w: 1040, em: 34, pitch: 50, split: 0.53, glow: 0.25, maxLines: 4, neon: s.neon });
-  nuText(outCtx, s.option, fb, { cx: 586, y: 816, w: 440, em: 34, pitch: 48, split: 0.585, glow: 0.25, maxLines: 1, neon: s.neon });
+  nuText(outCtx, s.title, ft, { cx: 600, y: 46, w: 1000, em: 42, pitch: 60, split: 0.624, glow: 0.3, maxLines: 1 });
+  nuText(outCtx, s.quote, fq, { cx: 587, y: 583, w: 1040, em: 34, pitch: 50, split: 0.53, glow: 0.25, maxLines: 4 });
+  nuText(outCtx, s.option, fb, { cx: 586, y: 816, w: 440, em: 34, pitch: 48, split: 0.585, glow: 0.25, maxLines: 1 });
 }
 T.nu = {
   name: '新 UI 超事件', en: 'New UI Super Event',
@@ -870,8 +818,7 @@ T.nu = {
       { k: 'title', type: 'text', label: '标题 Title', zh: '黑色方案', en: 'CASE BLACK' },
       { k: 'quote', type: 'textarea', label: '引言 Quote（回车换行）', rows: 4,
         zh: '“叛乱就会遭到镇压，这是永恒不变的铁律\n阿道夫 希特勒”', en: '"Rebellion will be crushed. That is the eternal law."\nAdolf Hitler' },
-      { k: 'option', type: 'text', label: '按钮 Button', zh: '亡羊补牢', en: 'Too Late' },
-      { k: 'neon', type: 'select', label: '字效 Text effect', def: 'none', opts: NEON_OPTS }
+      { k: 'option', type: 'text', label: '按钮 Button', zh: '亡羊补牢', en: 'Too Late' }
     ] },
     { title: '图片 Picture', fields: [
       { k: 'preset', type: 'thumbs', label: '示例图 Sample pictures', list: () => window.TNO_ASSETS.se.map(n => 'assets/se/' + n + '.png'), def: 'assets/se/great_asian_war.png' },
@@ -916,7 +863,7 @@ function fxText(c, text, chain, o) {
   for (let i = 1; i <= (o.bold || 0); i++) fxTc.drawImage(fxT, 0, 0, W, H, 1, 0, W, H);
   fxTc.globalCompositeOperation = 'source-atop';
   const dark = o.dark == null ? 0.3 : o.dark, soft = o.soft == null ? 2 : o.soft;
-  if (!NEON[o.neon]) L.lines.forEach((ln, i) => {
+  L.lines.forEach((ln, i) => {
     const top = pad + Math.round(i * o.pitch), yb = top + o.split * em;
     const next = i === n - 1 ? top + em * 1.4 : pad + Math.round((i + 1) * o.pitch);
     const g = fxTc.createLinearGradient(0, yb - soft, 0, yb + soft);
@@ -928,7 +875,6 @@ function fxText(c, text, chain, o) {
   return fxFinish(c, fxT, W, H, bw, n, o, 1);
 }
 const fxU = document.createElement('canvas'), fxUc = fxU.getContext('2d');
-const fxN = document.createElement('canvas'), fxNc = fxN.getContext('2d');
 /* halo + glow + placement; src holds the finished white/grey text with an 8px pad (scaled by fs when fs != 1) */
 function fxFinish(c, src, W, H, bw, n, o, fs) {
   const em = o.em, pad = Math.round(8 * fs);
@@ -943,22 +889,12 @@ function fxFinish(c, src, W, H, bw, n, o, fs) {
   const m = 26, SW = W + m * 2, SH = H + m * 2, k = em / 38, OFF = 6000;
   if (fxS.width < SW || fxS.height < SH) { fxS.width = Math.max(SW, fxS.width); fxS.height = Math.max(SH, fxS.height); }
   fxSc.clearRect(0, 0, fxS.width, fxS.height);
-  if (NEON[o.neon]) {
-    const bands = Array.from({ length: n }, (_, i) => { const t = m + pad + Math.round(i * o.pitch); return [t + em * 0.08, t + em * 0.92]; });
-    fxSc.drawImage(fxT, 0, 0, W, H, m, m, W, H);
-    // neonDraw reads the shape from a separate canvas, so copy the plain text out of fxS first
-    if (fxN.width < SW || fxN.height < SH) { fxN.width = Math.max(SW, fxN.width); fxN.height = Math.max(SH, fxN.height); }
-    fxNc.clearRect(0, 0, fxN.width, fxN.height); fxNc.drawImage(fxS, 0, 0);
-    fxSc.clearRect(0, 0, fxS.width, fxS.height);
-    neonDraw(fxSc, fxN, 0, 0, SW, SH, 0, 0, o.neon, em, bands);
-  } else {
   fxSc.save();
   fxSc.shadowOffsetX = OFF; fxSc.shadowOffsetY = 0; fxSc.shadowColor = 'rgba(0,0,0,1)';
   [[14, 4], [8, 3], [4, 2], [3, 1]].forEach(([b, dy]) => { fxSc.shadowBlur = b * k; fxSc.drawImage(fxT, 0, 0, W, H, m - OFF, m + Math.round(dy * k), W, H); });
   if (o.glow) { fxSc.shadowColor = 'rgba(255,255,255,' + o.glow + ')'; fxSc.shadowBlur = 14 * k; fxSc.drawImage(fxT, 0, 0, W, H, m - OFF, m, W, H); }
   fxSc.restore();
   fxSc.drawImage(fxT, 0, 0, W, H, m, m, W, H);
-  }
   const blockH = (n - 1) * o.pitch + em;
   if (o.rot) {
     c.save(); c.translate(Math.round(o.cx), Math.round(o.cy)); c.rotate(Math.PI / 2);
@@ -1010,8 +946,7 @@ function dpGroups(kind) {
     { title: '文字 Text', fields: [
       { k: 'info', type: 'textarea', rows: 3, label: '上栏三行：国名 / 阵营 / 领袖', zh: '神圣俄罗斯帝国\n欧洲公约\n芭芭拉·冯·塔博里茨基', en: 'People’s Republic of China\nNo Faction\nSong Puxuan' },
       { k: 'party', type: 'textarea', rows: 3, label: '下栏三行：执政党 / 意识形态 / 选举', zh: '王党\n威权发展主义\n事件选举', en: 'Chinese Communist Party\nAuthoritarian Developmentalism\nEvent Election' },
-      { k: 'button', type: 'text', label: '按钮文字（国策名）', zh: '往日之影', en: 'Courage Operation' },
-      { k: 'neon', type: 'select', label: '字效 Text effect', def: 'none', opts: NEON_OPTS }
+      { k: 'button', type: 'text', label: '按钮文字（国策名）', zh: '往日之影', en: 'Courage Operation' }
     ] },
     { title: '图片 Pictures', fields: [
       ...picFields('portrait', '领袖头像 Portrait'),
@@ -1070,9 +1005,9 @@ async function drawPanelTo(outCv, outCtx, kind, key, s, lang) {
   // text
   const cInfo = zh ? [zyI] : [oxI, zyI], cParty = zh ? [zyP] : [oxP, zyP];
   const eI = cInfo[0].lh, eP = cParty[0].lh, split = zh ? 0.55 : 0.61, dark = zh ? 0.3 : 0.28;
-  fxText(outCtx, s.info, cInfo, { x: G.info.x, y: G.info.y, em: eI, pitch: G.info.pitch, track: G.info.track, split, dark, align: 'left', glow: 0.2, maxLines: 3, neon: s.neon });
-  fxText(outCtx, s.party, cParty, { x: G.party.x, y: G.party.y, em: eP, pitch: G.party.pitch, track: G.party.track, split, dark, align: 'left', glow: 0.2, maxLines: 3, neon: s.neon });
-  fxText(outCtx, s.button, cParty, { cx: G.btn.cx, y: G.btn.y, em: eP, pitch: 44, track: G.btn.track, split, dark, align: 'center', glow: 0.2, maxLines: 1, neon: s.neon });
+  fxText(outCtx, s.info, cInfo, { x: G.info.x, y: G.info.y, em: eI, pitch: G.info.pitch, track: G.info.track, split, dark, align: 'left', glow: 0.2, maxLines: 3 });
+  fxText(outCtx, s.party, cParty, { x: G.party.x, y: G.party.y, em: eP, pitch: G.party.pitch, track: G.party.track, split, dark, align: 'left', glow: 0.2, maxLines: 3 });
+  fxText(outCtx, s.button, cParty, { cx: G.btn.cx, y: G.btn.y, em: eP, pitch: 44, track: G.btn.track, split, dark, align: 'center', glow: 0.2, maxLines: 1 });
   if (edited) {
     const Lb = P.labels, ch = [ox29, zy28];
     fxText(outCtx, s.tab1, ch, { cx: Lb.tab1.cx, y: Lb.tab1.y, em: 29, pitch: 40, split: 0.56, dark: 0.3, align: 'center', glow: 0.2, maxLines: 1 });
@@ -1187,7 +1122,7 @@ async function drawCwnTo(outCv, outCtx, s, lang) {
   const im = userImg['cwn.pic'];
   if (im) outCtx.drawImage(fxCanvas(im, pw, ph, pp(s, 'pic'), s.gray ? 'gray' : 'raw', 0), px, py);
   outCtx.drawImage(frame, 0, 0);
-  const common = { split: zh ? 0.55 : 0.6, dark: 0.3, glow: 0.2, neon: s.neon };
+  const common = { split: zh ? 0.55 : 0.6, dark: 0.3, glow: 0.2 };
   // Red Dusk: Title at (14,115) width 551 centred; Description at (31,181) width 512; option centred on the bar
   if (zh) fxText(outCtx, s.title, [zt], Object.assign({ cx: 579, y: 245, em: 42, pitch: 56, align: 'center', maxLines: 1 }, common));
   else fxText(outCtx, s.title, [et, zt], Object.assign({ cx: 579, y: 243, em: 46, pitch: 56, align: 'center', maxLines: 1, fontScale: 46 / 36, bold: 1 }, common));
@@ -1204,8 +1139,7 @@ T.cwn = {
       { k: 'desc', type: 'textarea', rows: 9, label: '正文 Description',
         zh: '今天凌晨，一封加急电报送抵外交部。电文不长，措辞却异常强硬：对方要求我们在四十八小时内给出明确答复，否则将自行采取行动。\n\n内阁已经连夜召开紧急会议，军方的将领们主张立即进入戒备，而外交官们则希望再争取一点时间。街头的报童还在叫卖昨天的旧闻，没有人知道明天的头版会写些什么。',
         en: 'An urgent telegram reached the Foreign Ministry before dawn. It is short and unusually blunt: we are to give a clear answer within forty-eight hours, or the other side will act on its own.\n\nThe cabinet has been in emergency session all night. The generals want the armed forces on alert at once; the diplomats ask for a little more time. On the street the newsboys are still shouting yesterday’s headlines, and nobody knows what tomorrow’s front page will say.' },
-      { k: 'option', type: 'text', label: '选项 Option', zh: '历史的车轮滚滚向前。', en: 'History moves on.' },
-      { k: 'neon', type: 'select', label: '字效 Text effect', def: 'none', opts: NEON_OPTS }
+      { k: 'option', type: 'text', label: '选项 Option', zh: '历史的车轮滚滚向前。', en: 'History moves on.' }
     ] },
     { title: '窗口 Window', fields: [
       { k: 'h', type: 'select', label: '高度 Height', def: '676', opts: [['676', '短 676'], ['781', '中 781'], ['1096', '长 1096']] }
