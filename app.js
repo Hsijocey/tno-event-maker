@@ -1249,6 +1249,31 @@ T.sfx = {
    ============================================================================ */
 
 /* === TFR Super Event (interface/TFR_Super_Events.gui) === */
+async function drawTfrSeTo(outCv, outCtx, s, lang) {
+  const up = userImg['tfr_se.pic'];
+  const [fTitle, fQuote, bg, bar, presetIm] = await Promise.all([
+    loadChain('tfr_vcr20', lang), loadChain('tfr_vcr16', lang),
+    TF('super_bg.png'), TF('spacebar.png'),
+    up ? null : loadImg(s.preset)
+  ]);
+  outCv.width = 1001; outCv.height = 639; outCtx.clearRect(0, 0, outCv.width, outCv.height);
+  const im = up || presetIm;
+  outCtx.save();
+  outCtx.beginPath(); outCtx.rect(10, 30, 982, 594); outCtx.clip();
+  if (up || s.filter !== 'raw') {
+    const mode = s.filter === 'gray' ? 'gray' : 'raw';
+    const scan = s.filter === 'raw' ? 0 : +s.scan;
+    outCtx.drawImage(fxCanvas(im, 982, 594, up ? pp(s, 'pic') : null, mode, scan), 10, 30);
+  } else {
+    drawCover(outCtx, im, 10, 30, 982, 594, null);
+  }
+  outCtx.restore();
+  outCtx.drawImage(bg, 0, 0);
+  textBox(outCtx, s.title, fTitle, 'tfr_vcr20', { x: 260, y: 18, w: 490, h: 28, fmt: 'center', vcenter: true, fit: true });
+  textBox(outCtx, s.quote, fQuote, 'tfr_vcr16', { x: 250, y: 435, w: 500, fmt: 'center', maxLines: 5 });
+  outCtx.drawImage(bar, 350, 585);
+  textBox(outCtx, s.option, fQuote, 'tfr_vcr16', { x: 350, y: 585, w: 300, h: 35, fmt: 'center', vcenter: true, fit: true });
+}
 T.tfr_se = {
   name: 'TFR 超事件', en: 'TFR Super Event',
   groups: [
@@ -1267,35 +1292,85 @@ T.tfr_se = {
     ] },
     { title: '配乐 Music（导出带配乐视频）', collapsed: true, fields: [{ k: 'music', type: 'audio' }] }
   ],
-  async draw(s, lang) {
-    const up = userImg['tfr_se.pic'];
-    const [fTitle, fQuote, bg, bar, presetIm] = await Promise.all([
-      loadChain('tfr_vcr20', lang), loadChain('tfr_vcr16', lang),
-      TF('super_bg.png'), TF('spacebar.png'),
-      up ? null : loadImg(s.preset)
-    ]);
-    cv.width = 1001; cv.height = 639; ctx.clearRect(0, 0, cv.width, cv.height);
-    const im = up || presetIm;
-    // Picture sits behind Super_event_bg (which already carries the official TFR purple/pink CRT glow & quote box)
-    ctx.save();
-    ctx.beginPath(); ctx.rect(10, 30, 982, 594); ctx.clip();
-    if (up || s.filter !== 'raw') {
-      const mode = s.filter === 'gray' ? 'gray' : 'raw';
-      const scan = s.filter === 'raw' ? 0 : +s.scan;
-      ctx.drawImage(fxCanvas(im, 982, 594, up ? pp(s, 'pic') : null, mode, scan), 10, 30);
-    } else {
-      drawCover(ctx, im, 10, 30, 982, 594, null);
-    }
-    ctx.restore();
-    ctx.drawImage(bg, 0, 0);
-    textBox(ctx, s.title, fTitle, 'tfr_vcr20', { x: 260, y: 18, w: 490, h: 28, fmt: 'center', vcenter: true, fit: true });
-    textBox(ctx, s.quote, fQuote, 'tfr_vcr16', { x: 250, y: 435, w: 500, fmt: 'center', maxLines: 5 });
-    ctx.drawImage(bar, 350, 585);
-    textBox(ctx, s.option, fQuote, 'tfr_vcr16', { x: 350, y: 585, w: 300, h: 35, fmt: 'center', vcenter: true, fit: true });
-  }
+  draw(s, lang) { return drawTfrSeTo(cv, ctx, s, lang); }
 };
 
 /* === TFR Diplomacy View (interface/countrydiplomacyview.gui + TFR_interface_subideogly_notice.gui) === */
+async function drawTfrDvTo(outCv, outCtx, s, lang, noPlaceholders) {
+  const showPh = !noPlaceholders && !!s.samples;
+  const [f24, f12, bg, hdr, cls, upBg, fov, ideoUnk, tabBg, tab, lfr, midBg, pieOv, gbtn, gunk, gprog, gprogBg, gprogFr, spBg, unk] = await Promise.all([
+    loadChain('tfr_vcr24', lang), loadChain('tfr_vcr12', lang),
+    TF('tiled_bg.png'), TF('header_bg.png'), TF('closebutton.png'), TF('diplo_upper.png'),
+    TF('flag_overlay.png'), showPh ? TF('ideology_unknown.png') : null, TF('diplo_tab_bg.png'), TF('diplo_tab.png'),
+    TF('diplo_leader_frame.png'), TF('diplo_mid.png'), TF('pie_ov_diplo.png'),
+    TF('diplo_goal_btn.png'), showPh ? TF('goal_unknown.png') : null, TF('pol_goal_prog.png'),
+    TF('pol_goal_prog_bg.png'), TF('pol_goal_prog_frame.png'), s.spirits ? TF('diplo_spirits_bg.png') : null, showPh ? TF('leader_unknown.png') : null
+  ]);
+  const W = 550, H = s.spirits ? 420 : 344;
+  outCv.width = W; outCv.height = H; outCtx.clearRect(0, 0, W, H);
+  cornered(outCtx, bg, 0, 0, W, H, 64, 64, true);
+  outCtx.save(); outCtx.beginPath(); outCtx.rect(0, 0, W, H); outCtx.clip();
+  outCtx.drawImage(hdr, -248, 6);
+  outCtx.restore();
+  textBox(outCtx, s.header, f24, 'tfr_vcr24', { x: 14, y: 8, w: 300, maxLines: 1 });
+  outCtx.drawImage(cls, W - 43, 9);
+  const OY = 50;
+  outCtx.drawImage(upBg, 139, OY - 4);
+  const fl = userImg['tfr_dv.flag'];
+  if (fl) {
+    outCtx.save(); outCtx.beginPath(); outCtx.rect(38, OY + 7, 82, 52); outCtx.clip();
+    drawCover(outCtx, fl, 38, OY + 7, 82, 52, null);
+    outCtx.restore();
+  }
+  outCtx.drawImage(fov, 30, OY);
+  const idIm = userImg['tfr_dv.ideopic'] || (showPh ? ideoUnk : null);
+  if (idIm) fitIn(outCtx, idIm, 158, OY, 66, 68, 1);
+  textBox(outCtx, s.country, f12, 'tfr_vcr12', { x: 245, y: OY + 3, w: 240, fit: true });
+  textBox(outCtx, s.faction, f12, 'tfr_vcr12', { x: 245, y: OY + 23, w: 235, fit: true });
+  textBox(outCtx, s.leader, f12, 'tfr_vcr12', { x: 245, y: OY + 43, w: 250, fit: true });
+  outCtx.drawImage(tabBg, 15, OY + 111);
+  outCtx.drawImage(tab, 260, 0, 260, 42, 15, OY + 70, 260, 42);
+  outCtx.drawImage(tab, 0, 0, 260, 42, 275, OY + 70, 260, 42);
+  textBox(outCtx, s.tab1, f12, 'tfr_vcr12', { x: 15, y: OY + 70, w: 260, h: 42, fmt: 'center', vcenter: true, fit: true });
+  textBox(outCtx, s.tab2, f12, 'tfr_vcr12', { x: 275, y: OY + 70, w: 260, h: 42, fmt: 'center', vcenter: true, fit: true });
+  const TY = OY + 110;
+  const por = userImg['tfr_dv.portrait'] || (showPh ? unk : null);
+  if (por) {
+    const pc = userImg['tfr_dv.portrait'] ? fxCanvas(por, 156, 210, pp(s, 'portrait'), 'raw', 0) : por;
+    outCtx.imageSmoothingQuality = 'high';
+    outCtx.drawImage(pc, 22, TY + 5, 156 * 0.75, 210 * 0.75);
+  }
+  outCtx.drawImage(lfr, 13, TY);
+  outCtx.drawImage(midBg, 138, TY);
+  const pie = parsePie(s.pie, 'tfr'), tot = pie.reduce((a, p) => a + p.v, 0);
+  if (tot > 0) {
+    let a0 = 0;
+    for (const p of pie) {
+      const a1 = a0 + p.v / tot * Math.PI * 2;
+      outCtx.beginPath(); outCtx.moveTo(192.5, TY + 44.5); outCtx.arc(192.5, TY + 44.5, 30, a0, a1); outCtx.closePath();
+      outCtx.fillStyle = p.c; outCtx.fill();
+      a0 = a1;
+    }
+  }
+  outCtx.drawImage(pieOv, 157, TY + 9);
+  textBox(outCtx, s.party, f12, 'tfr_vcr12', { x: 263, y: TY + 20, w: 245, fit: true });
+  textBox(outCtx, s.ideology, f12, 'tfr_vcr12', { x: 263, y: TY + 35, w: 245, fit: true });
+  textBox(outCtx, s.elections, f12, 'tfr_vcr12', { x: 263, y: TY + 50, w: 245, fit: true });
+  const FX = 144, FY = TY + 88;
+  outCtx.drawImage(gbtn, 0, 0, 285, 64, FX + 103, FY + 7, 285, 64);
+  const gi = userImg['tfr_dv.goalicon'] || (showPh ? gunk : null);
+  if (gi) fitIn(outCtx, gi, FX + 48 - 41, FY + 39 - 41, 82, 82, 1);
+  textBox(outCtx, s.goal, f12, 'tfr_vcr12', { x: FX + 146, y: FY + 22, w: 200, h: 20, fmt: 'center', vcenter: true, fit: true });
+  const pMax = 212, pw = Math.round(pMax * Math.max(0, Math.min(1, +s.progress)));
+  outCtx.drawImage(gprogBg, 0, 0, Math.min(gprogBg.width, pMax), 6, FX + 132, FY + 53, pMax, 6);
+  if (pw > 0) outCtx.drawImage(gprog, 0, 6, Math.min(gprog.width, pw), 6, FX + 132, FY + 53, pw, 6);
+  outCtx.drawImage(gprogFr, 0, 0, gprogFr.width, gprogFr.height, FX + 130, FY + 52, pMax + 4, 8);
+  if (s.spirits && spBg) {
+    outCtx.drawImage(spBg, 15, OY + 271);
+    textBox(outCtx, s.spirit_title, f12, 'tfr_vcr12', { x: 22, y: OY + 286, w: 120, maxLines: 2 });
+    (userImg['tfr_dv.spiritimgs'] || []).slice(0, 6).forEach((im, i) => fitIn(outCtx, im, 147 + i * 64, OY + 285, 60, 62, 1));
+  }
+}
 T.tfr_dv = {
   name: 'TFR 外交界面', en: 'TFR Diplomacy View',
   groups: [
@@ -1327,95 +1402,59 @@ T.tfr_dv = {
       { k: 'ideopic', type: 'image', label: '意识形态/阵营图标 Ideology icon（可选）' },
       { k: 'goalicon', type: 'image', label: '国策图标 Focus icon（可选）' },
       { k: 'spiritimgs', type: 'images', max: 6, label: '国家精神图标（开启底部栏时生效，最多 6 个）' },
-      { k: 'samples', type: 'check', label: '没上传头像/国策时显示默认占位图', def: true }
+      { k: 'samples', type: 'check', label: '没上传头像/国策时显示默认占位图', def: false }
     ] }
   ],
-  async draw(s, lang) {
-    const [f24, f12, bg, hdr, cls, upBg, fov, ideoUnk, tabBg, tab, lfr, midBg, pieOv, gbtn, gunk, gprog, gprogBg, gprogFr, spBg, unk] = await Promise.all([
-      loadChain('tfr_vcr24', lang), loadChain('tfr_vcr12', lang),
-      TF('tiled_bg.png'), TF('header_bg.png'), TF('closebutton.png'), TF('diplo_upper.png'),
-      TF('flag_overlay.png'), TF('ideology_unknown.png'), TF('diplo_tab_bg.png'), TF('diplo_tab.png'),
-      TF('diplo_leader_frame.png'), TF('diplo_mid.png'), TF('pie_ov_diplo.png'),
-      TF('diplo_goal_btn.png'), TF('goal_unknown.png'), TF('pol_goal_prog.png'),
-      TF('pol_goal_prog_bg.png'), TF('pol_goal_prog_frame.png'), TF('diplo_spirits_bg.png'), TF('leader_unknown.png')
-    ]);
-    const W = 550, H = s.spirits ? 420 : 344;
-    cv.width = W; cv.height = H; ctx.clearRect(0, 0, W, H);
-    cornered(ctx, bg, 0, 0, W, H, 64, 64, true);
-    // Header bar (header_bg positioned at x=-248, y=6 inside 550px window)
-    ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip();
-    ctx.drawImage(hdr, -248, 6);
-    ctx.restore();
-    textBox(ctx, s.header, f24, 'tfr_vcr24', { x: 14, y: 8, w: 300, maxLines: 1 });
-    ctx.drawImage(cls, W - 43, 9);
-    // country_info origin y=50
-    const OY = 50;
-    ctx.drawImage(upBg, 139, OY - 4);
-    // Flag (82x52 inside 98x67 overlay at x=30, y=50)
-    const fl = userImg['tfr_dv.flag'];
-    if (fl) {
-      ctx.save(); ctx.beginPath(); ctx.rect(38, OY + 7, 82, 52); ctx.clip();
-      drawCover(ctx, fl, 38, OY + 7, 82, 52, null);
-      ctx.restore();
-    }
-    ctx.drawImage(fov, 30, OY);
-    const idIm = userImg['tfr_dv.ideopic'] || (s.samples ? ideoUnk : null);
-    if (idIm) fitIn(ctx, idIm, 158, OY, 66, 68, 1);
-    textBox(ctx, s.country, f12, 'tfr_vcr12', { x: 245, y: OY + 3, w: 240, fit: true });
-    textBox(ctx, s.faction, f12, 'tfr_vcr12', { x: 245, y: OY + 23, w: 235, fit: true });
-    textBox(ctx, s.leader, f12, 'tfr_vcr12', { x: 245, y: OY + 43, w: 250, fit: true });
-    // Tabs (Diplomacy / Intel Ledger)
-    ctx.drawImage(tabBg, 15, OY + 111);
-    ctx.drawImage(tab, 260, 0, 260, 42, 15, OY + 70, 260, 42);
-    ctx.drawImage(tab, 0, 0, 260, 42, 275, OY + 70, 260, 42);
-    textBox(ctx, s.tab1, f12, 'tfr_vcr12', { x: 15, y: OY + 70, w: 260, h: 42, fmt: 'center', vcenter: true, fit: true });
-    textBox(ctx, s.tab2, f12, 'tfr_vcr12', { x: 275, y: OY + 70, w: 260, h: 42, fmt: 'center', vcenter: true, fit: true });
-    // diplomacy_tab_top origin y=OY+110 (=160)
-    const TY = OY + 110;
-    const por = userImg['tfr_dv.portrait'] || (s.samples ? unk : null);
-    if (por) {
-      const pc = userImg['tfr_dv.portrait'] ? fxCanvas(por, 156, 210, pp(s, 'portrait'), 'raw', 0) : por;
-      ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(pc, 22, TY + 5, 156 * 0.75, 210 * 0.75);
-    }
-    ctx.drawImage(lfr, 13, TY);
-    ctx.drawImage(midBg, 138, TY);
-    // Pie chart (GFX_political_chart_big size 30 at x=192, y=TY+44)
-    const pie = parsePie(s.pie, 'tfr'), tot = pie.reduce((a, p) => a + p.v, 0);
-    if (tot > 0) {
-      let a0 = 0;
-      for (const p of pie) {
-        const a1 = a0 + p.v / tot * Math.PI * 2;
-        ctx.beginPath(); ctx.moveTo(192.5, TY + 44.5); ctx.arc(192.5, TY + 44.5, 30, a0, a1); ctx.closePath();
-        ctx.fillStyle = p.c; ctx.fill();
-        a0 = a1;
-      }
-    }
-    ctx.drawImage(pieOv, 157, TY + 9);
-    // Ruling party / subideology / elections (official 15px vertical spacing)
-    textBox(ctx, s.party, f12, 'tfr_vcr12', { x: 263, y: TY + 20, w: 245, fit: true });
-    textBox(ctx, s.ideology, f12, 'tfr_vcr12', { x: 263, y: TY + 35, w: 245, fit: true });
-    textBox(ctx, s.elections, f12, 'tfr_vcr12', { x: 263, y: TY + 50, w: 245, fit: true });
-    // Active national focus (origin x=144, y=TY+88)
-    const FX = 144, FY = TY + 88;
-    ctx.drawImage(gbtn, 0, 0, 285, 64, FX + 103, FY + 7, 285, 64);
-    const gi = userImg['tfr_dv.goalicon'] || (s.samples ? gunk : null);
-    if (gi) fitIn(ctx, gi, FX + 48 - 41, FY + 39 - 41, 82, 82, 1);
-    textBox(ctx, s.goal, f12, 'tfr_vcr12', { x: FX + 146, y: FY + 22, w: 200, h: 20, fmt: 'center', vcenter: true, fit: true });
-    const pMax = 212, pw = Math.round(pMax * Math.max(0, Math.min(1, +s.progress)));
-    ctx.drawImage(gprogBg, 0, 0, Math.min(gprogBg.width, pMax), 6, FX + 132, FY + 53, pMax, 6);
-    if (pw > 0) ctx.drawImage(gprog, 0, 6, Math.min(gprog.width, pw), 6, FX + 132, FY + 53, pw, 6);
-    ctx.drawImage(gprogFr, 0, 0, gprogFr.width, gprogFr.height, FX + 130, FY + 52, pMax + 4, 8);
-    // Optional national spirits bar
-    if (s.spirits) {
-      ctx.drawImage(spBg, 15, OY + 271);
-      textBox(ctx, s.spirit_title, f12, 'tfr_vcr12', { x: 22, y: OY + 286, w: 120, maxLines: 2 });
-      (userImg['tfr_dv.spiritimgs'] || []).slice(0, 6).forEach((im, i) => fitIn(ctx, im, 147 + i * 64, OY + 285, 60, 62, 1));
-    }
-  }
+  draw(s, lang) { return drawTfrDvTo(cv, ctx, s, lang, false); }
 };
 
 /* === TFR Country / Report Event (interface/eventwindow.gui EventWindow) === */
+async function drawTfrReportTo(outCv, outCtx, s, lang, noSamplePic) {
+  const up = userImg['tfr_report.pic'];
+  const [fTitle, fDesc, fOpt, top, mid, bot, opt, mini, sampleIm] = await Promise.all([
+    loadChain('tfr_electro20', lang), loadChain('tfr_electro', lang), loadChain('tfr_opt', lang),
+    TF('report_top.png'), TF('report_mid.png'), TF('report_bot.png'),
+    TF('option_entry.png'), TF('btn_minimize.png'),
+    (up || noSamplePic) ? null : TF('report_sample.png')
+  ]);
+  const L = layout(s.desc, fDesc, 520, STYLE.bomb);
+  const opts = String(s.options || '').split('\n').map(x => x.trim()).filter(Boolean);
+  const extraOpt = Math.max(0, opts.length - 3) * 48;
+  const minH = { auto: 60, short: 90, medium: 220, long: 380 }[s.size] || 60;
+  const Hm = Math.max(minH, L.height + 24) + (s.showPic ? extraOpt : opts.length * 48 + 20);
+  const botH = s.showPic ? bot.height : 64;
+  const W = top.width, H = top.height + Hm + botH;
+  outCv.width = W; outCv.height = H; outCtx.clearRect(0, 0, W, H);
+  outCtx.drawImage(top, 0, 0);
+  const stripY = 16, stripH = mid.height - 32;
+  for (let y = 0; y < Hm; y += stripH) {
+    const dh = Math.min(stripH, Hm - y);
+    outCtx.drawImage(mid, 0, stripY, W, dh, 0, top.height + y, W, dh);
+  }
+  const by = top.height + Hm;
+  if (s.showPic) {
+    outCtx.drawImage(bot, 0, by);
+    const picX = 52, picY = by + 130, picW = 500, picH = 250;
+    const im = up || sampleIm;
+    if (im) {
+      if (up || s.gray) outCtx.drawImage(fxCanvas(im, picW, picH, up ? pp(s, 'pic') : null, s.gray ? 'gray' : 'raw', 0), picX, picY);
+      else drawCover(outCtx, im, picX, picY, picW, picH, null);
+    } else {
+      outCtx.fillStyle = '#141418'; outCtx.fillRect(picX, picY, picW, picH);
+    }
+  } else {
+    outCtx.drawImage(bot, 0, bot.height - botH, W, botH, 0, by, W, botH);
+  }
+  outCtx.drawImage(mini, 40, 47);
+  textBox(outCtx, s.title, fTitle, 'tfr_electro20', { x: 27, y: 70, w: 551, fmt: 'center', fit: true });
+  drawLayout(outCtx, L, 45, 114, 520, 'left');
+  const optStartY = s.showPic ? (by - 15 - extraOpt) : (by - opts.length * 48 - 4);
+  opts.forEach((o, i) => {
+    const ox = Math.round((W - opt.width) / 2), oy = optStartY + i * 48;
+    outCtx.drawImage(opt, ox, oy);
+    textBox(outCtx, o, fOpt, 'tfr_opt', { x: ox + 6, y: oy + 4, w: opt.width - 12, h: opt.height - 8, fmt: 'center', vcenter: true, maxLines: 2 });
+  });
+}
 T.tfr_report = {
   name: 'TFR 弹窗事件', en: 'TFR Country Event',
   groups: [
@@ -1435,53 +1474,55 @@ T.tfr_report = {
       { k: 'gray', type: 'check', label: '转为黑白 Greyscale', def: false }
     ] }
   ],
-  async draw(s, lang) {
-    const up = userImg['tfr_report.pic'];
-    const [fTitle, fDesc, fOpt, top, mid, bot, opt, mini, sampleIm] = await Promise.all([
-      loadChain('tfr_electro20', lang), loadChain('tfr_electro', lang), loadChain('tfr_opt', lang),
-      TF('report_top.png'), TF('report_mid.png'), TF('report_bot.png'),
-      TF('option_entry.png'), TF('btn_minimize.png'),
-      up ? null : TF('report_sample.png')
-    ]);
-    const L = layout(s.desc, fDesc, 520, STYLE.bomb);
-    const opts = String(s.options || '').split('\n').map(x => x.trim()).filter(Boolean);
-    const extraOpt = Math.max(0, opts.length - 3) * 48;
-    const minH = { auto: 60, short: 90, medium: 220, long: 380 }[s.size] || 60;
-    const Hm = Math.max(minH, L.height + 24) + (s.showPic ? extraOpt : opts.length * 48 + 20);
-    const botH = s.showPic ? bot.height : 64;
-    const W = top.width, H = top.height + Hm + botH;
-    cv.width = W; cv.height = H; ctx.clearRect(0, 0, W, H);
-    ctx.drawImage(top, 0, 0);
-    // Tile clean middle scanline section of report_mid (rows 16..64) so there are zero seams
-    const stripY = 16, stripH = mid.height - 32;
-    for (let y = 0; y < Hm; y += stripH) {
-      const dh = Math.min(stripH, Hm - y);
-      ctx.drawImage(mid, 0, stripY, W, dh, 0, top.height + y, W, dh);
-    }
-    const by = top.height + Hm;
-    if (s.showPic) {
-      ctx.drawImage(bot, 0, by);
-      const im = up || sampleIm;
-      const picX = 52, picY = by + 130, picW = 500, picH = 250;
-      if (up || s.gray) ctx.drawImage(fxCanvas(im, picW, picH, up ? pp(s, 'pic') : null, s.gray ? 'gray' : 'raw', 0), picX, picY);
-      else drawCover(ctx, im, picX, picY, picW, picH, null);
-    } else {
-      ctx.drawImage(bot, 0, bot.height - botH, W, botH, 0, by, W, botH);
-    }
-    ctx.drawImage(mini, 40, 47);
-    textBox(ctx, s.title, fTitle, 'tfr_electro20', { x: 27, y: 70, w: 551, fmt: 'center', fit: true });
-    drawLayout(ctx, L, 45, 114, 520, 'left');
-    // Options sit above the bottom picture (matching official eventwindow.gui options_grid y=-15, picture y=130)
-    const optStartY = s.showPic ? (by - 15 - extraOpt) : (by - opts.length * 48 - 4);
-    opts.forEach((o, i) => {
-      const ox = Math.round((W - opt.width) / 2), oy = optStartY + i * 48;
-      ctx.drawImage(opt, ox, oy);
-      textBox(ctx, o, fOpt, 'tfr_opt', { x: ox + 6, y: oy + 4, w: opt.width - 12, h: opt.height - 8, fmt: 'center', vcenter: true, maxLines: 2 });
-    });
-  }
+  draw(s, lang) { return drawTfrReportTo(cv, ctx, s, lang, false); }
 };
 
 /* === TFR News Event (interface/eventwindow.gui EventWindow_News — browser window) === */
+async function drawTfrNewsTo(outCv, outCtx, s, lang, noSamplePic) {
+  const up = userImg['tfr_news.pic'];
+  const [fTitle, fDesc, fOpt, bg, ov, opt, mini, sampleIm] = await Promise.all([
+    loadChain('tfr_kenyan28', lang), loadChain('tfr_electro', lang), loadChain('tfr_opt', lang),
+    TF('news_bg.png'), TF('news_pic_overlay.png'), TF('option_entry.png'), TF('btn_minimize.png'),
+    (up || noSamplePic) ? null : TF('news_sample.png')
+  ]);
+  const L = layout(s.desc, fDesc, 560, STYLE.bomb);
+  const opts = String(s.options || '').split('\n').map(x => x.trim()).filter(Boolean);
+  const optBlockH = Math.max(1, opts.length) * 50;
+  const topH = 340, tileSrcY = 340, tileSrcH = 340, botSrcY = 680, botH = 175;
+  const neededBodyH = L.height + 24 + optBlockH + 10;
+  const targetBodyH = {
+    std: Math.max(365, neededBodyH),
+    auto: Math.max(160, neededBodyH),
+    short: Math.max(210, neededBodyH),
+    long: Math.max(540, neededBodyH)
+  }[s.size] || Math.max(365, neededBodyH);
+  const midH = Math.max(0, targetBodyH - 95);
+  const W = bg.width, H = topH + midH + botH;
+  outCv.width = W; outCv.height = H; outCtx.clearRect(0, 0, W, H);
+  outCtx.drawImage(bg, 0, 0, W, topH, 0, 0, W, topH);
+  for (let y = 0; y < midH; y += tileSrcH) {
+    const dh = Math.min(tileSrcH, midH - y);
+    outCtx.drawImage(bg, 0, tileSrcY, W, dh, 0, topH + y, W, dh);
+  }
+  outCtx.drawImage(bg, 0, botSrcY, W, botH, 0, topH + midH, W, botH);
+  const im = up || sampleIm;
+  if (im) {
+    if (up || s.gray) outCtx.drawImage(fxCanvas(im, 397, 153, up ? pp(s, 'pic') : null, s.gray ? 'gray' : 'raw', 0), 150, 164);
+    else drawCover(outCtx, im, 150, 164, 397, 153, null);
+  } else {
+    outCtx.fillStyle = '#141418'; outCtx.fillRect(150, 164, 397, 153);
+  }
+  outCtx.drawImage(ov, 143, 160);
+  outCtx.drawImage(mini, 45, 20);
+  textBox(outCtx, s.title, fTitle, 'tfr_kenyan28', { x: 120, y: 106, w: 460, fmt: 'center', maxLines: 2 });
+  drawLayout(outCtx, L, 75, 325, 560, 'left');
+  const optStartY = H - 82 - optBlockH;
+  opts.forEach((o, i) => {
+    const ox = Math.round((W - opt.width) / 2), oy = optStartY + i * 50;
+    outCtx.drawImage(opt, ox, oy);
+    textBox(outCtx, o, fOpt, 'tfr_opt', { x: ox + 6, y: oy + 4, w: opt.width - 12, h: opt.height - 8, fmt: 'center', vcenter: true, maxLines: 2 });
+  });
+}
 T.tfr_news = {
   name: 'TFR 新闻事件', en: 'TFR News Event',
   groups: [
@@ -1500,50 +1541,7 @@ T.tfr_news = {
       { k: 'gray', type: 'check', label: '转为黑白 Greyscale', def: false }
     ] }
   ],
-  async draw(s, lang) {
-    const up = userImg['tfr_news.pic'];
-    const [fTitle, fDesc, fOpt, bg, ov, opt, mini, sampleIm] = await Promise.all([
-      loadChain('tfr_kenyan28', lang), loadChain('tfr_electro', lang), loadChain('tfr_opt', lang),
-      TF('news_bg.png'), TF('news_pic_overlay.png'), TF('option_entry.png'), TF('btn_minimize.png'),
-      up ? null : TF('news_sample.png')
-    ]);
-    const L = layout(s.desc, fDesc, 560, STYLE.bomb);
-    const opts = String(s.options || '').split('\n').map(x => x.trim()).filter(Boolean);
-    const optBlockH = Math.max(1, opts.length) * 50;
-    // news_bg.png (713x935): top header+pic bay 0..340, clean tileable scanline band 340..680, bottom fade 680..855
-    const topH = 340, tileSrcY = 340, tileSrcH = 340, botSrcY = 680, botH = 175;
-    const neededBodyH = L.height + 24 + optBlockH + 10;
-    const targetBodyH = {
-      std: Math.max(365, neededBodyH),
-      auto: Math.max(160, neededBodyH),
-      short: Math.max(210, neededBodyH),
-      long: Math.max(540, neededBodyH)
-    }[s.size] || Math.max(365, neededBodyH);
-    const midH = Math.max(0, targetBodyH - 95); // botH includes ~95px of usable white paper above bottom glow
-    const W = bg.width, H = topH + midH + botH;
-    cv.width = W; cv.height = H; ctx.clearRect(0, 0, W, H);
-    ctx.drawImage(bg, 0, 0, W, topH, 0, 0, W, topH);
-    for (let y = 0; y < midH; y += tileSrcH) {
-      const dh = Math.min(tileSrcH, midH - y);
-      ctx.drawImage(bg, 0, tileSrcY, W, dh, 0, topH + y, W, dh);
-    }
-    ctx.drawImage(bg, 0, botSrcY, W, botH, 0, topH + midH, W, botH);
-    // News picture (397x153 at 150,164) + overlay (143,160)
-    const im = up || sampleIm;
-    if (up || s.gray) ctx.drawImage(fxCanvas(im, 397, 153, up ? pp(s, 'pic') : null, s.gray ? 'gray' : 'raw', 0), 150, 164);
-    else drawCover(ctx, im, 150, 164, 397, 153, null);
-    ctx.drawImage(ov, 143, 160);
-    ctx.drawImage(mini, 45, 20);
-    textBox(ctx, s.title, fTitle, 'tfr_kenyan28', { x: 120, y: 106, w: 460, fmt: 'center', maxLines: 2 });
-    drawLayout(ctx, L, 75, 325, 560, 'left');
-    // Options anchored neatly above bottom white edge (H - 85 - optBlockH)
-    const optStartY = H - 82 - optBlockH;
-    opts.forEach((o, i) => {
-      const ox = Math.round((W - opt.width) / 2), oy = optStartY + i * 50;
-      ctx.drawImage(opt, ox, oy);
-      textBox(ctx, o, fOpt, 'tfr_opt', { x: ox + 6, y: oy + 4, w: opt.width - 12, h: opt.height - 8, fmt: 'center', vcenter: true, maxLines: 2 });
-    });
-  }
+  draw(s, lang) { return drawTfrNewsTo(cv, ctx, s, lang, false); }
 };
 
 /* === TFR Politics / Leader & Country View (interface/countrypoliticsview.gui) === */
@@ -1641,8 +1639,74 @@ T.tfr_pol = {
   }
 };
 
+/* === TFR Full Composite Suite (TFR 总): Diplomacy (top-left, crisp 2x, zero placeholder icons) +
+       News or Report Event (bottom-left) + Super Event (bottom-right, native 1:1 1001x639).
+       Matches the Cold War Suite layout & stays live-synced with individual TFR tabs. === */
+const tfrCvDv = document.createElement('canvas'), tfrCvLeft = document.createElement('canvas'), tfrCvSe = document.createElement('canvas');
+const tfrSubCache = { dv: '', left: '', se: '' };
+T.tfr_all = {
+  name: 'TFR 总', en: 'TFR Suite',
+  groups: [
+    { title: '整体版式与背景 Layout & Background', fields: [
+      { k: 'bg', type: 'select', label: '底色 Background', def: 'black', opts: [['black', '纯黑（同参考图）'], ['trans', '透明（抠图，方便叠地图）']] },
+      { k: 'leftMod', type: 'select', label: '左下模块 Bottom-left panel', def: 'tfr_news', opts: [['tfr_news', 'TFR 新闻事件（浏览器样式）'], ['tfr_report', 'TFR 弹窗事件（紫色报告框）']] },
+      { k: 'leftSample', type: 'check', label: '左下事件显示默认示例图（取消 = 干净黑底框）', def: false },
+      ...picFields('bgpic', '自定义底图（可选，上传后覆盖背景）')
+    ] },
+    { sub: 'tfr_dv', title: 'TFR 外交界面（左上 · 与对应页签同步，无占位图标）' },
+    { sub: 'tfr_news', title: 'TFR 新闻事件（左下 · 与对应页签同步）' },
+    { sub: 'tfr_report', title: 'TFR 弹窗事件（左下可选 · 与对应页签同步）' },
+    { sub: 'tfr_se', title: 'TFR 超事件（右下 · 与对应页签同步）' },
+    { title: '配乐 Music（导出带配乐整图视频）', collapsed: true, fields: [{ k: 'music', type: 'audio' }] }
+  ],
+  async draw(s, lang) {
+    const leftMod = s.leftMod === 'tfr_report' ? 'tfr_report' : 'tfr_news';
+    const [dvS, leftS, seS] = [getState('tfr_dv', lang), getState(leftMod, lang), getState('tfr_se', lang)];
+    const kDv = lang + '|' + imgRev + '|' + JSON.stringify(dvS);
+    const kLeft = leftMod + '|' + lang + '|' + imgRev + '|' + (s.leftSample ? 1 : 0) + '|' + JSON.stringify(leftS);
+    const kSe = lang + '|' + imgRev + '|' + JSON.stringify(seS);
+    await Promise.all([
+      tfrSubCache.dv === kDv ? null : drawTfrDvTo(tfrCvDv, tfrCvDv.getContext('2d'), dvS, lang, true).then(() => { tfrSubCache.dv = kDv; }),
+      tfrSubCache.left === kLeft ? null : (leftMod === 'tfr_report'
+        ? drawTfrReportTo(tfrCvLeft, tfrCvLeft.getContext('2d'), leftS, lang, !s.leftSample)
+        : drawTfrNewsTo(tfrCvLeft, tfrCvLeft.getContext('2d'), leftS, lang, !s.leftSample)
+      ).then(() => { tfrSubCache.left = kLeft; }),
+      tfrSubCache.se === kSe ? null : drawTfrSeTo(tfrCvSe, tfrCvSe.getContext('2d'), seS, lang).then(() => { tfrSubCache.se = kSe; })
+    ]);
+    // Top-left Diplomacy drawn at exact crisp 2x (1100 wide = 49.7% W);
+    // Bottom-right Super Event drawn at native 1:1 (1001x639 = 45.2% W, 2.7% gap);
+    // Bottom-left News/Report centered neatly under Diplomacy.
+    const W = 2214;
+    const dvW = tfrCvDv.width * 2, dvH = tfrCvDv.height * 2;
+    const leftW = leftMod === 'tfr_report' ? 880 : 940;
+    const leftH = Math.round(tfrCvLeft.height * leftW / tfrCvLeft.width);
+    const leftX = Math.round(18 + (dvW - leftW) / 2);
+    const leftY = 18 + dvH + 14;
+    const seX = 18 + dvW + 60;
+    const seY = Math.round(Math.max(480, leftY - 165));
+    let H = Math.max(1764, leftY + leftH + 28, seY + tfrCvSe.height + 60);
+    if (H & 1) H++;
+    cv.width = W; cv.height = H; ctx.clearRect(0, 0, W, H);
+    if (s.bg === 'black') { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H); }
+    const bgIm = userImg['tfr_all.bgpic'];
+    if (bgIm) drawCover(ctx, bgIm, 0, 0, W, H, pp(s, 'bgpic'));
+    // 1. Top-left: TFR Diplomacy at exact 2x (pixel-sharp VCR02 font, zero placeholder icons)
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(tfrCvDv, 0, 0, tfrCvDv.width, tfrCvDv.height, 18, 18, dvW, dvH);
+    ctx.restore();
+    // 2. Bottom-left: TFR News or Report Event
+    ctx.save();
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(tfrCvLeft, 0, 0, tfrCvLeft.width, tfrCvLeft.height, leftX, leftY, leftW, leftH);
+    ctx.restore();
+    // 3. Bottom-right: TFR Super Event at 100% native 1:1 (1001x639)
+    ctx.drawImage(tfrCvSe, seX, seY);
+  }
+};
+
 const TNO_ORDER = ['se', 'nu', 'dpb', 'dpa', 'cwn', 'cwall', 'sfx', 'news', 'report', 'pol', 'dv', 'cs', 'ci'];
-const TFR_ORDER = ['tfr_se', 'tfr_dv', 'tfr_report', 'tfr_news', 'tfr_pol'];
+const TFR_ORDER = ['tfr_se', 'tfr_dv', 'tfr_report', 'tfr_news', 'tfr_pol', 'tfr_all'];
 const lastTab = { tno: 'se', tfr: 'tfr_se' };
 let cur = 'se', lang = 'zh';
 let store = {};
@@ -1676,6 +1740,7 @@ let imgRev = 0;
 const tabSnap = {};
 function tabSig(t, lg) {
   if (t === 'cwall') return lg + '|' + imgRev + '|' + JSON.stringify([getState('cwall', lg), getState('dpa', lg), getState('cwn', lg), getState('nu', lg)]);
+  if (t === 'tfr_all') return lg + '|' + imgRev + '|' + JSON.stringify([getState('tfr_all', lg), getState('tfr_dv', lg), getState('tfr_news', lg), getState('tfr_report', lg), getState('tfr_se', lg)]);
   if (t === 'sfx') return lg + '|' + imgRev + '|' + JSON.stringify(getState('se', lg));
   return lg + '|' + imgRev + '|' + JSON.stringify(getState(t, lg));
 }
@@ -1736,6 +1801,9 @@ function prefetchTab(t, lg) {
   }
   if (t === 'tfr_pol') {
     return safe([loadChain('tfr_vcr24', lg), loadChain('tfr_vcr14', lg), loadChain('tfr_vcr12', lg), loadChain('tfr_vcr10', lg), TF('tiled_thin2.png'), TF('header_bg.png'), TF('pol_bg.png'), TF('pol_leader_frame.png'), TF('pol_goal_bg.png'), TF('pol_goal_btn.png')]);
+  }
+  if (t === 'tfr_all') {
+    return safe([prefetchTab('tfr_dv', lg), prefetchTab('tfr_news', lg), prefetchTab('tfr_se', lg)]);
   }
   return Promise.resolve();
 }
